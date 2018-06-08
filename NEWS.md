@@ -4,6 +4,12 @@ News file for torch-dataframe
 Version: development
 --------------------
 
+Version: 1.6.1
+--------------------
+* The get_max_value/get_min_value use torch.max/min when no missing data is present in the column
+* Fixed upgrade_frame bug
+* Fixed bug with saving CSV-files when they contain boolean values
+
 Version: 1.6
 --------------------
 * The data is now stored in Dataseries that handles all the manipulations, statistics, categoricals, etc internally. The data backend is either a tensor or a tds.Vec in order to better accomodate large datasets.
