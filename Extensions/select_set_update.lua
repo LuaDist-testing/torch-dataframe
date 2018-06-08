@@ -1,127 +1,157 @@
-require 'dok'
 local params = {...}
 local Dataframe = params[1]
 
---
--- sub() : Selects a subset of rows and returns those
---
--- ARGS: - start 			(optional) [number] 	: row to start at
--- 		   - stop 			(optional) [number] 	: last row to include
---
--- RETURNS: Dataframe
---
-function Dataframe:sub(...)
-	local args = dok.unpack(
-		{...},
-		'Dataframe.sub',
-		'Retrieves a subset of elements',
-		{arg='start', type='integer', help='row to start at', default=1},
-		{arg='stop', type='integer', help='row to stop at', default=self.n_rows}
-	)
-	assert(args.start <= args.stop, "Stop argument can't be less than the start argument")
-	assert(args.start > 0, "Start position can't be less than 1")
-	assert(args.stop <= self.n_rows, "Stop position can't be more than available rows")
+local argcheck = require "argcheck"
+local doc = require "argcheck.doc"
 
-	indexes = {}
-	for i = args.start,args.stop do
+doc[[
+
+## Subsetting and manipulation functions
+
+]]
+
+Dataframe.sub = argcheck{
+	doc =  [[
+<a name="Dataframe.sub">
+### Dataframe.sub(@ARGP)
+
+@ARGT
+
+Selects a subset of rows and returns those
+
+_Return value_: Dataframe
+]],
+	{name="self", type="Dataframe"},
+	{name='start', type='number', doc='Row to start at', default=1},
+	{name="stop", type='number', doc='Last row to include', default=false},
+	call = function(self, start, stop)
+	if (not stop) then
+		stop = self.n_rows
+	end
+
+	assert(start <= stop, "Stop argument can't be less than the start argument")
+	assert(start > 0, "Start position can't be less than 1")
+	assert(stop <= self.n_rows, "Stop position can't be more than available rows")
+
+	local indexes = {}
+	for i = start,stop do
 		table.insert(indexes, i)
 	end
-	return self:_create_subset(indexes)
-end
 
---
--- get_random ('n_items') : Retrieves a random number of rows for exploring
---
--- ARGS: - n_items (optional) [integer] : number of rows to get
---
--- RETURNS: Dataframe
-function Dataframe:get_random(...)
-	local args = dok.unpack(
-		{...},
-		'Dataframe.get_random',
-		'Retrieves a random number of rows for exploring',
-		{arg='n_items', type='integer', help='The number of items to retreive', default=1}
-	)
-	assert(isint(args.n_items), "The number must be an integer. You've provided " .. tostring(args.n_items))
-	assert(args.n_items > 0 and
-	       args.n_items < self.n_rows, "The number must be an integer between 0 and " ..
-				 self.n_rows .. " - you've provided " .. tostring(args.n_items))
+	return self:_create_subset(Df_Array(indexes))
+end}
+
+Dataframe.get_random = argcheck{
+	doc =  [[
+<a name="Dataframe.get_random">
+### Dataframe.get_random(@ARGP)
+
+@ARGT
+
+Retrieves a random number of rows for exploring
+
+_Return value_: Dataframe
+]],
+	{name="self", type="Dataframe"},
+	{name='n_items', type='number', doc='Number of rows to retrieve', default=1},
+	call = function(self, n_items)
+
+	assert(isint(n_items), "The number must be an integer. You've provided " .. tostring(n_items))
+	assert(n_items > 0 and
+	       n_items < self.n_rows, "The number must be an integer between 0 and " ..
+				 self.n_rows .. " - you've provided " .. tostring(n_items))
 	local rperm = torch.randperm(self.n_rows)
 	local indexes = {}
-	for i = 1,args.n_items do
+	for i = 1,n_items do
 		table.insert(indexes, rperm[i])
 	end
-	return self:_create_subset(indexes)
-end
+	return self:_create_subset(Df_Array(indexes))
+end}
 
---
--- head() : get the table's first elements
---
--- ARGS: - n_items 			(required) [number] 	: items to print
---
--- RETURNS: Dataframe
---
-function Dataframe:head(...)
-	local args = dok.unpack(
-		{...},
-		'Dataframe.head',
-		'Retrieves the first elements of a table',
-		{arg='n_items', type='integer', help='The number of items to display', default=10}
-	)
-	head = self:sub(1, math.min(args.n_items, self.n_rows))
+Dataframe.head = argcheck{
+	doc =  [[
+<a name="Dataframe.head">
+### Dataframe.head(@ARGP)
+
+@ARGT
+
+Retrieves the first elements of a table
+
+_Return value_: Dataframe
+]],
+	{name="self", type="Dataframe"},
+	{name='n_items', type='number', doc='Number of rows to retrieve', default=10},
+	call = function(self, n_items)
+
+	head = self:sub(1, math.min(n_items, self.n_rows))
+
 	return head
-end
+end}
 
---
--- tail() : get the table's last elements
---
--- ARGS: - n_items 			(required) [number] 	: items to print
---
--- RETURNS: Dataframe
---
-function Dataframe:tail(...)
-	local args = dok.unpack(
-		{...},
-		'Dataframe.tail',
-		'Retrieves the last elements of a table',
-		{arg='n_items', type='integer', help='The number of items to display', default=10},
-		{arg='html', type='boolean', help='Display as html', default=false}
-	)
-	start_pos = math.max(1, self.n_rows - args.n_items + 1)
+Dataframe.tail = argcheck{
+	doc =  [[
+<a name="Dataframe.tail">
+### Dataframe.tail(@ARGP)
+
+@ARGT
+
+Retrieves the last elements of a table
+
+_Return value_: Dataframe
+]],
+	{name="self", type="Dataframe"},
+	{name='n_items', type='number', doc='Number of rows to retrieve', default=10},
+	call = function(self, n_items)
+
+	start_pos = math.max(1, self.n_rows - n_items + 1)
 	tail = self:sub(start_pos)
+
 	return tail
-end
+end}
 
--- Creates a class and returns a subset based on the index items
-function Dataframe:_create_subset(index_items)
-	if (type(index_items) ~= 'table') then
-		index_items = {index_items}
-	end
+Dataframe._create_subset = argcheck{
+	doc =  [[
+<a name="Dataframe._create_subset">
+### Dataframe._create_subset(@ARGP)
 
-	for _,i in pairs(index_items) do
-		assert(isint(i) and
-		 			 i > 0 and
-					 i <= self.n_rows,
-					 "There are values outside the allowed index range 1 to " .. self.n_rows ..
-					 ": " .. tostring(i))
+@ARGT
+
+Creates a class and returns a subset based on the index items. Intended for internal
+use.
+
+_Return value_: Dataframe
+]],
+	{name="self", type="Dataframe"},
+	{name='index_items', type='Df_Array', doc='The indexes to retrieve'},
+	call = function(self, index_items)
+	index_items = index_items.data
+
+	for i=1,#index_items do
+		local val = index_items[i]
+		assert(isint(val) and
+		       val > 0 and
+		       val <= self.n_rows,
+		       "There are values outside the allowed index range 1 to " .. self.n_rows ..
+		       ": " .. tostring(val))
 	end
 
 	-- TODO: for some reason the categorical causes errors in the loop, this strange copy fixes it
-	tmp = clone(self.categorical)
+	-- The above is most likely to global variables beeing overwritten due to lack of local definintions
+	local tmp = clone(self.categorical)
 	self.categorical = {}
-	ret = Dataframe.new()
+	local ret = Dataframe.new()
 	for _,i in pairs(index_items) do
-		val = self:get_row(i)
-		ret:insert(val)
+		local val = self:get_row(i)
+		ret:insert(Df_Dict(val))
 	end
 	self.categorical = tmp
 	ret = self:_copy_meta(ret)
 	return ret
-end
+end}
 
 
 --
--- where('column_name','my_value') : find the first row where the column has the given value
+-- where('column_name','my_value') :
 --
 -- ARGS: - column 		(required) [string] : column to browse or a condition_function that
 --                                          takes a row and returns true/false depending
@@ -130,27 +160,50 @@ end
 --
 -- RETURNS : Dataframe
 --
-function Dataframe:where(column, item_to_find)
-	if (type(column) ~= 'function') then
-		condition_function = function(row)
-			return row[column] == item_to_find
-		end
-	else
-		condition_function = column
-	end
+Dataframe.where = argcheck{
+	doc =  [[
+<a name="Dataframe.where">
+### Dataframe.where(@ARGP)
 
-	local matches = self:_where(condition_function)
-	return self:_create_subset(matches)
-end
+@ARGT
 
---
--- _where(column, item_to_find)
---
--- ARGS: - condition_function 	(required) [func] : function to test if the current row will be updated
---
--- RETURNS : table with the index of all the matches
---
-function Dataframe:_where(condition_function)
+Find the rows where the column has the given value
+
+_Return value_: Dataframe
+]],
+	{name="self", type="Dataframe"},
+	{name='column', type='string',
+	 doc='column to browse or findin the item argument'},
+	{name='item_to_find', type='number|string|boolean',
+	 doc='The value to find'},
+	call = function(self, column, item_to_find)
+
+	return self:where(function(row)
+		return row[column] == item_to_find
+	end)
+end}
+
+Dataframe.where = argcheck{
+	doc =  [[
+You can also provide a function for more advanced matching
+
+@ARGT
+
+]],
+	overload=Dataframe.where,
+	{name="self", type="Dataframe"},
+	{name='match_fn', type='function',
+	 doc='Function that takes a row as an argument and returns boolean'},
+	call = function(self, match_fn)
+	local matches = self:_where_search(match_fn)
+	return self:_create_subset(Df_Array(matches))
+end}
+
+Dataframe._where_search = argcheck{
+	{name="self", type="Dataframe"},
+	{name="condition_function", type="function",
+	 doc="Function to test if the current row will be updated"},
+	call=function(self, condition_function)
 	local matches = {}
 	for i = 1, self.n_rows do
 		local row = self:get_row(i)
@@ -160,42 +213,80 @@ function Dataframe:_where(condition_function)
 	end
 
 	return matches
-end
+end}
 
---
--- update(function(row) row['column'] == 'test' end, function(row) row['other_column'] = 'new_value' return row end) : Update according to condition
---
--- ARGS: - condition_function 	(required) [func] : function to test if the current row will be updated
---		 - update_function 		(required) [func] : function to update the row
---
--- RETURNS : nothing
---
-function Dataframe:update(condition_function, update_function)
-	local matches = self:_where(condition_function)
+Dataframe.update = argcheck{
+	doc =  [[
+<a name="Dataframe.update">
+### Dataframe.update(@ARGP)
+
+@ARGT
+
+_Return value_: void
+]],
+	{name="self", type="Dataframe"},
+	{name='condition_function', type='function',
+	 doc='Function that tests if the row should be updated. It should accept a row table as an argument and return boolean'},
+	{name='update_function', type='function',
+	 doc='Function that updates the row. Takes the entire row as an argument, modifies it and returns the same.'},
+	call = function(self, condition_function, update_function)
+	local matches = self:_where_search(condition_function)
 	for _, i in pairs(matches) do
 		row = self:get_row(i)
-		new_row = update_function(row)
-		self:_update_single_row(i, new_row)
+		new_row = update_function(clone(row))
+		self:_update_single_row(i, Df_Tbl(new_row), Df_Tbl(row))
 	end
-end
+end}
 
---
--- set('my_value', 'column_name', 'new_value') : change value for a line
---
--- ARGS: - item_to_find 	(required)	[any]		: value to search
--- 		 - column_name 		(required) 	[string] 	: column where to search
---		 - new_value 		(required) 	[table]		: new value to set for the line
---
--- RETURNS: nothing
---
-function Dataframe:set(item_to_find, column_name, new_value)
+-- Internal function to update a single row from data and index
+Dataframe._update_single_row = argcheck{
+	{name="self", type="Dataframe"},
+	{name="index_row", type="number"},
+	{name="new_row", type="Df_Tbl"},
+	{name="old_row", type="Df_Tbl"},
+	call=function(self, index_row, new_row, old_row)
+	for i=1,#self.columns do
+		local key = self.columns[i]
+		if (new_row.data[key] ~= old_row.data[key] or
+		    (isnan(new_row.data[key]) or
+		     isnan(old_row.data[key]))) then
+			if (self:is_categorical(key)) then
+				new_row.data[key] = self:_get_raw_cat_key(key, new_row.data[key])
+			end
+			self.dataset[key][index_row] = new_row.data[key]
+		end
+	end
+end}
+
+Dataframe.set = argcheck{
+	doc =  [[
+<a name="Dataframe.set">
+### Dataframe.set(@ARGP)
+
+@ARGT
+
+Change value for a line where a column has a certain value
+
+_Return value_: void
+]],
+	{name="self", type="Dataframe"},
+	{name='item_to_find', type='number|string|boolean',
+	 doc='Value to search'},
+	{name='column_name', type='string',
+ 	 doc='The name of the column'},
+	 {name='new_value', type='Df_Dict',
+ 	 doc='Value to replace with'},
+	call = function(self, item_to_find, column_name, new_value)
 	assert(self:has_column(column_name), "Could not find column: " .. tostring(column_name))
+	new_value = new_value.data
+
 	temp_converted_cat_cols = {}
 	column_data = self:get_column(column_name)
 	for i = 1, self.n_rows do
 		if column_data[i] == item_to_find then
 			for _,k in pairs(self.columns) do
-				-- If the column is being updated by the user
+				-- If the column shoul be updated then the user should have set the key
+				-- in the new_key table
 				if new_value[k] ~= nil then
 					if (self:is_categorical(k)) then
 						new_value[k] = self:_get_raw_cat_key(column_name, new_value[k])
@@ -206,16 +297,4 @@ function Dataframe:set(item_to_find, column_name, new_value)
 			break
 		end
 	end
-end
-
--- Internal function to update a single row from data and index
-function Dataframe:_update_single_row(index_row, new_row)
-	for _,key in pairs(self.columns) do
-		if (self:is_categorical(key)) then
-			new_row[key] = self:_get_raw_cat_key(key, new_row[key])
-		end
-		self.dataset[key][index_row] = new_row[key]
-	end
-
-	return row
-end
+end}

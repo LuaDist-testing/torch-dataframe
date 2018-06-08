@@ -22,7 +22,7 @@ describe("Categorical column", function()
 
 	it("Should be convertible to an integer column",function()
 		a:as_categorical('Col B')
-		
+
 		assert.are.same(a:get_cat_keys('Col B'), {A=1, B=2})
 		assert.is_true(a:is_categorical('Col B'))
 		assert.is_true(a:is_numerical('Col B'))
@@ -30,7 +30,7 @@ describe("Categorical column", function()
 
 	it("Should be convertible to an int linspace if it's a numerical column",function()
 		a:as_categorical('Col C')
-		
+
 		assert.are.same(a:get_cat_keys('Col C'), {[8] = 1, [9] = 2})
 		assert.is_true(a:is_categorical('Col C'))
 		assert.is_true(not a:is_categorical('Col A'))
@@ -47,7 +47,7 @@ describe("Categorical column", function()
 		end)
 
 		it("Should handle table input",function()
-			assert.are.same(a:to_categorical({2, 1}, 'Col B'), {'B', 'A'})
+			assert.are.same(a:to_categorical(Df_Array(2, 1), 'Col B'), {'B', 'A'})
 		end)
 
 		it("Should handle tensor input",function()
@@ -71,12 +71,12 @@ describe("Categorical column", function()
 		end)
 
 		it("Should handle a table as input",function()
-			assert.are.same(a:from_categorical({'A', 'B'}, 'Col B'), {1, 2})
+			assert.are.same(a:from_categorical(Df_Array('A', 'B'), 'Col B'), {1, 2})
 		end)
 
 		it("Should handle a tensor as input",function()
-			assert.is.equal(a:from_categorical{data = {'A', 'B'}, column_name = 'Col B', as_tensor = true}[1], torch.Tensor({1, 2})[1])
-			assert.is.equal(a:from_categorical{data = {'A', 'B'}, column_name = 'Col B', as_tensor = true}[2], torch.Tensor({1, 2})[2])
+			assert.is.equal(a:from_categorical{data = Df_Array('A', 'B'), column_name = 'Col B', as_tensor = true}[1], torch.Tensor({1, 2})[1])
+			assert.is.equal(a:from_categorical{data = Df_Array('A', 'B'), column_name = 'Col B', as_tensor = true}[2], torch.Tensor({1, 2})[2])
 			-- tester:eq(a:from_categorical{data = {'A', 'B'}, column_name = 'Col B', as_tensor = true}, torch.Tensor({1, 2}))
 		end)
 
@@ -100,7 +100,7 @@ describe("Categorical column", function()
 
 
 		true_vals = {"TRUE", "FALSE", "TRUE"}
-		a:load_table{data={['Col A']=true_vals,['Col B']={10,11,12}}}
+		a:load_table{data=Df_Dict({['Col A']=true_vals,['Col B']={10,11,12}})}
 		a:as_categorical('Col A')
 		assert.are.same(a:get_column('Col A'), true_vals)
 	end)
@@ -124,15 +124,15 @@ describe("Categorical column", function()
 			["Col B"] = "C",
 			["Col C"] = 10
 		}
-		a:insert(new_data)
+		a:insert(Df_Dict(new_data))
 		assert.are.same(a:get_cat_keys('Col B'), {A=1, B=2, C=3})
 	end)
 
 	it("Updates rows according to custom function",function()
 		local a = Dataframe("./data/advanced_short.csv")
-		
+
 		a:as_categorical('Col B')
-		
+
 		a:update(
 			function(row) return row['Col A'] == 3 end,
 			function(row) row['Col B'] = 'C' return row end
@@ -143,7 +143,7 @@ describe("Categorical column", function()
 
 		a:load_csv{path = "./data/advanced_short.csv"}
 		a:as_categorical('Col B')
-		
+
 		a:update(
 			function(row) return row['Col B'] == 'B' end,
 			function(row) row['Col B'] = 'A' return row end
@@ -157,12 +157,12 @@ describe("Categorical column", function()
 
 		a:load_csv{path = "./data/advanced_short.csv"}
 		a:as_categorical('Col B')
-		
+
 		a:update(
 			function(row) return row['Col B'] == 'B' end,
 			function(row) row['Col B'] = 'A' return row end
 		)
-		
+
 		a:clean_categorical('Col B', true)
 		assert.are.same(a:get_cat_keys('Col B'), {A=1})-- "Keys should be removed after calling clean_categorical with resetting"
 
@@ -183,11 +183,11 @@ describe("Categorical column", function()
 		local a = Dataframe()
 		a:load_csv{path = "./data/advanced_short.csv"}
 		a:as_categorical('Col B')
-		a:set('A', 'Col B', {['Col B'] = 'C'})
+		a:set('A', 'Col B', Df_Dict({['Col B'] = 'C'}))
 
 		assert.are.same(a:get_cat_keys('Col B'), {A=1, B=2, C=3})
 
-		a:set('C', 'Col B', {['Col B'] = 'B'})
+		a:set('C', 'Col B', Df_Dict({['Col B'] = 'B'}))
 		assert.are.same(a:get_cat_keys('Col B'), {A=1, B=2, C=3})
 		a:clean_categorical('Col B')
 		assert.are.same(a:get_cat_keys('Col B'), {B=2})
@@ -219,7 +219,7 @@ describe("Categorical column", function()
 		a:as_categorical('Col B')
 		assert.is_true(a:is_categorical('Col B'))
 
-		a:load_table{data={['Col A']="3",['Col B']={10,11,12}}}
+		a:load_table{data=Df_Dict({['Col A']="3",['Col B']={10,11,12}})}
 		assert.is_true(not a:is_categorical('Col B'))
 		a:as_categorical('Col A')
 		assert.is_true(a:is_categorical('Col A'))
@@ -229,6 +229,7 @@ describe("Categorical column", function()
 		local a = Dataframe("./data/advanced_short.csv")
 
 		a:as_categorical('Col B')
+		assert.has.error(function() a:as_categorical(1) end)
 		assert.is_true(a:is_categorical('Col B'))
 		a:rename_column('Col B', 'Alt col B')
 		assert.has.error(function() a:is_categorical('Col B') end)
@@ -241,7 +242,7 @@ describe("Categorical column", function()
 		a:as_categorical('Col B')
 		local ret_val = a:where('Col B', 'A')
 		assert.are.same(ret_val:shape(), {rows = 1, cols = 3})
-		assert.are.same(ret_val:from_categorical({'A', 'B'}, 'Col B'),
+		assert.are.same(ret_val:from_categorical(Df_Array('A', 'B'), 'Col B'),
 		{1, 2})-- "The categorical values shouldn't change due to subsetting"
 
 		ret_val = a:where('Col B', 'B')
@@ -252,8 +253,9 @@ describe("Categorical column", function()
 			["Col B"] = "C",
 			["Col C"] = 10
 		}
-		ret_val:insert(new_data)
-		assert.are.same(ret_val:from_categorical({'A', 'B', 'C'}, 'Col B'),
+
+		ret_val:insert(Df_Dict(new_data))
+		assert.are.same(ret_val:from_categorical(Df_Array('A', 'B', 'C'), 'Col B'),
 		{1, 2, 3})-- "The categorical should add the new value as the last number"
 
 		ret_val = a:where('Col B', 'A')
@@ -267,7 +269,7 @@ describe("Categorical column", function()
 		local ret_val = a:sub(1,2)
 		assert.are.same(ret_val:shape(), {rows = 2, cols = 3})
 
-		a:add_column("Col D", {0/0, "B", "C"})
+		a:add_column("Col D", Df_Array({0/0, "B", "C"}))
 		ret_val = a:sub(1,2)
 		assert.is_true(isnan(ret_val:get_column('Col D')[1]))-- "Should retain nan value"
 		assert.is.equal(ret_val:get_column('Col D')[2], 'B')-- "Should retain string value"
@@ -307,8 +309,8 @@ describe("Categorical column", function()
 		assert.is.equal(tnsr:size(2),
 		a:shape()["cols"] - 1)-- "Incorrect number of columns, expecting " .. a:shape()["cols"] - 1 .. " but got " .. tnsr:size(2)
 		sum = 0
-		col_no = a:get_column_no('Col A')
-		
+		col_no = a:get_column_order('Col A')
+
 		for i=1,tnsr:size(1) do
 			sum = math.abs(tnsr[i][col_no] - a:get_column('Col A')[i])
 		end
@@ -322,14 +324,13 @@ describe("Categorical column", function()
 		assert.is.equal(tnsr:size(2),
 		a:shape()["cols"])-- "Incorrect number of columns, expecting " .. a:shape()["cols"] - 1 .. " but got " .. tnsr:size(2)
 		sum = 0
-		col_no = a:get_column_no('Col A')
+		col_no = a:get_column_order('Col A')
 
 		for i=1,tnsr:size(1) do
 			sum = math.abs(tnsr[i][col_no] - a:get_column('Col A')[i])
 		end
-		
+
 		assert.is_true(sum < 1e-5)-- "The difference between the columns should be < 10^-5, it is currently " .. sum
 	end)
 
 end)
-

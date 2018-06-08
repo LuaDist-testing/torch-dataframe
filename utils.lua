@@ -62,7 +62,7 @@ table.exact_length = function(tbl)
 	if (type(tbl) ~= 'table') then
 		return 1
 	end
-  i = 0
+  local i = 0
   for k,v in pairs(tbl) do
     i = i + 1
   end
@@ -79,7 +79,7 @@ end
 
 table.collapse_to_string = function(tbl)
 	assert(type(tbl) == "table")
-	ret = ""
+	local ret = ""
 	if(tbl == nil) then
 		ret = "No table provided"
 	elseif(table.exact_length(tbl) == 0) then
@@ -89,6 +89,11 @@ table.collapse_to_string = function(tbl)
 			if (ret ~= "") then
 				ret = ret .. ", "
 			end
+
+			if (type(v) == "table") then
+				v = ("[%s]"):format(table.collapse_to_string(v))
+			end
+
 			ret = ret .. "'" .. v .."'"
 		end
 	else
@@ -96,10 +101,29 @@ table.collapse_to_string = function(tbl)
 			if (ret ~= "") then
 				ret = ret .. ", "
 			end
+
+			if (type(v) == "table") then
+				v = ("[%s]"):format(table.collapse_to_string(v))
+			end
+
 			ret = ret .. "'" .. k .. "'=>'" .. v .. "'"
 		end
 	end
+	
 	return ret
 end
 
+table.has_element = function(haystack, needle)
+	for _,value in pairs(haystack) do
+		if (value == needle) then
+			return true
+		end
+	end
+	return false
+end
+
+-- Util for debugging purpose
+table._dump = function(tbl)
+	print(table.collapse_to_string(tbl))
+end
 -- END UTILS

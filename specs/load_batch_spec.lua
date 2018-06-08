@@ -13,11 +13,13 @@ paths.dofile('init.lua')
 lfs.chdir("specs")
 
 describe("Loading batch process", function()
-		
-	it("Should force a call to init_batch",function()
-		local a = Dataframe("./data/realistic_29_row_data.csv")
-		assert.is.error(function() a:load_batch() end)
+	local a = Dataframe("./data/realistic_29_row_data.csv")
 
+	it("Raises an error if init_batch hasn't be called",function()
+		assert.has.error(function() a:load_batch() end)
+	end)
+
+	it("Initializes",function()
 		torch.manualSeed(0)
 		a:init_batch()
 		order = 0
@@ -40,10 +42,12 @@ describe("Loading batch process", function()
 
 	describe("In action",function()
 		local a = Dataframe("./data/realistic_29_row_data.csv")
+		a:init_batch()
 
-		it("Should force a call to init_batch",function()
-			assert.is.error(function() a:load_batch() end)
+		it("Fails if the number of lines isn't correct",function()
+			--assert.has.error(a:load_batch(0))
 		end)
+
 
 		it("Loads batches",function()
 			a:init_batch()
@@ -55,7 +59,7 @@ describe("Loading batch process", function()
 
 		it("Loads categorical columns",function()
 			a:as_categorical('Gender')
-			data, label, names = a:load_batch(5, 0,function(row) return torch.Tensor({1, 2}) end,'train')
+			data, label, names = a:load_batch(5, 0, function(row) return torch.Tensor({1, 2}) end,'train')
 			assert.is.equal(data:size(1), 5)-- "The data with gender has invalid rows"
 			assert.is.equal(data:size(2), 2)-- "The data with gender has invalid columns"
 			assert.is.equal(label:size(1), 5)-- "The labels with gender have invalid size"
@@ -91,4 +95,3 @@ describe("Loading batch process", function()
 		end)
 	end)
 end)
-
