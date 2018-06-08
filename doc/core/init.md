@@ -21,6 +21,7 @@ Creates and initializes a Dataframe class. Envoked through `local my_dataframe =
 })
 ```
 
+_Return value_: Dataframe
 Read in an csv-file
 
 ```
@@ -59,6 +60,26 @@ as values. The column types are:
    no_rows      = number     -- The number of rows
   [column_order = Df_Array]  -- The column order
   [set_missing  = boolean]   -- Whether all elements should be set to missing from start [default=false]
+})
+```
+
+_Return value_: Dataframe
+No updates is performed on already inserted data. The purpose of this method
+is to prepare a Dataframe object.
+
+A schema is a hash table with the column names as keys and the column types
+as values. The column types are:
+- `boolean`
+- `integer`
+- `long`
+- `double`
+- `string` (this is stored as a `tds.Vec` and can be any value)
+
+```
+({
+   self         = Dataframe  -- 
+   schema       = Df_Dict    -- The schema to use for initializaiton
+   column_order = Df_Array   -- The column order
 })
 ```
 
@@ -150,7 +171,7 @@ Asserts that the number is a valid index.
 ({
    self     = Dataframe  -- 
    index    = number     -- The index to investigate
-  [plus_one = boolean]   -- When adding rows, an index of size(1) + 1 is OK [default=false]
+  [plus_one = boolean]   -- Count next non-existing index as good. When adding rows, an index of size(1) + 1 is OK [default=false]
 })
 ```
 

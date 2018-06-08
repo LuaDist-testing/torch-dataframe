@@ -1,17 +1,9 @@
--- This file was automatically generated for the LuaDist project.
-
 package = "torch-dataframe"
-version = "1.6-1"
--- LuaDist source
+version = "1.7-0"
 source = {
-  tag = "1.6-1",
-  url = "git://github.com/LuaDist-testing/torch-dataframe.git"
+	url = "https://github.com/alexmili/torch-dataframe/archive/v1.7-0.tar.gz",
+	dir = "torch-dataframe-1.7-0"
 }
--- Original source
--- source = {
--- 	url = "https://github.com/alexmili/torch-dataframe/archive/v1.6-1.tar.gz",
--- 	dir = "torch-dataframe-1.6-1"
--- }
 
 description = {
 		summary = "A Dataframe class for Torch",

@@ -4,16 +4,6 @@ require 'torch'
 local argcheck = require "argcheck"
 local doc = require "argcheck.doc"
 
--- Since torchnet also uses docs we need to escape them when recording the documentation
-local torchnet
-if (doc.__record) then
-	doc.stop()
-	torchnet = require "torchnet"
-	doc.record()
-else
-	torchnet = require "torchnet"
-end
-
 doc[[
 ## Dataseries
 
@@ -45,7 +35,8 @@ Dataseries.__init = argcheck{
 <a name="Dataseries.__init">
 ### Dataseries.__init(@ARGP)
 
-Creates and initializes a Dataseries class. Envoked through `local my_series = Dataseries()`.
+Creates and initializes an empty Dataseries. Envoked through `local my_series = Dataseries()`.
+
 The type can be:
 - boolean
 - integer
@@ -57,34 +48,48 @@ The type can be:
 
 ]],
 	{name="self", type="Dataseries"},
+	{name="type", type="string", doc="The type of data storage to init.", default="string"},
+	call=function(self, type)
+		parent_class.__init(self)
+		self.data = self.new_storage(0, type)
+		self.missing = tds.Hash()
+		self._variable_type = type
+end}
+
+Dataseries.__init = argcheck{
+	doc =  [[
+### Dataseries.__init(@ARGP)
+
+Creates and initializes a Dataseries class. Envoked through `local my_series = Dataseries()`.
+The type can be:
+- boolean
+- integer
+- double
+- string
+- torch tensor or tds.Vec
+
+@ARGT
+
+]],
+	overload=Dataseries.__init,
+	{name="self", type="Dataseries"},
 	{name="size", type="number", doc="The size of the new series"},
 	{name="type", type="string", doc="The type of data storage to init.", opt=true},
 	call=function(self, size, type)
 	assert(isint(size) and size >= 0, "Size has to be a positive integer")
 	parent_class.__init(self)
-	if (type == "integer") then
-		self.data = torch.IntTensor(size)
-	elseif (type == "long") then
-		self.data = torch.LongTensor(size)
-	elseif (type == "double") then
-		self.data = torch.DoubleTensor(size)
-	elseif (type == "boolean" or
-	        type == "string" or
-	        type == "tds.Vec" or
-	        type == nil) then
-		self.data = tds.Vec()
-		self.data:resize(size)
-	elseif (type:match("torch.*Tensor")) then
-		self.data = torch.Tensor(size):type(type)
-	else
-		assert(false, ("The type '%s' has not yet been implemented"):format(type))
-	end
+	self.data = self.new_storage(size, type)
 	self.missing = tds.Hash()
 	self._variable_type = type
 end}
 
 Dataseries.__init = argcheck{
 	doc =  [[
+### Dataseries.__init(@ARGP)
+
+Creates and initializes a Dataseries with a given Tensor or Vector. Envoked through `local my_series = Dataseries(myData)`.
+
+The data can be a torch tensor or a tds.Vec.
 
 @ARGT
 
@@ -111,6 +116,14 @@ Dataseries.__init = argcheck{
 end}
 
 Dataseries.__init = argcheck{
+	doc =  [[
+### Dataseries.__init(@ARGP)
+
+Creates and initializes a Dataseries with a given Df_Array. Envoked through `local my_series = Dataseries(Df_Array(myTable))`.
+
+@ARGT
+
+]],
 	{name="self", type="Dataseries"},
 	{name="data", type="Df_Array"},
 	{name="max_elmnts4type", type="number",
@@ -132,6 +145,77 @@ Dataseries.__init = argcheck{
 	for i=1,#data do
 		self:set(i, data[i])
 	end
+end}
+
+Dataseries.load = argcheck{
+	doc=[[
+<a name="Dataseries.load">
+### Dataseries.load(@ARGP)
+
+Load a Tensor or tds.Vec without checking type or missing values.
+
+@ARGT
+
+_Return value_: self
+]],
+	{name="self", type="Dataseries"},
+	{name="data", type="torch.*Tensor|tds.Vec", doc="data to load"},
+	call=function(self, data)
+		self.data = data
+		self.missing = tds.Hash()
+		self._variable_type = torch.type(self.data)
+		return self
+end}
+
+Dataseries.new_storage = argcheck{
+	doc = [[
+<a name="Dataseries.new_storage">
+### Dataseries.new_storage(@ARGP)
+
+Internal method to retrieve a storage element for the Dataseries. The type can be:
+- boolean
+- integer
+- double
+- string
+- torch tensor or tds.Vec
+
+@ARGT
+
+]],
+	{name="size", type="number", doc="The size of the storage"},
+	{name="type", type="string", doc="The type of data storage to initialize", default="string"},
+	call = function(size, type)
+
+	if (type == "integer") then
+			return torch.IntTensor(size)
+	end
+
+	if (type == "long") then
+			return torch.LongTensor(size)
+	end
+
+	if (type == "double") then
+		return torch.DoubleTensor(size)
+	end
+
+	if (type == "boolean" or
+	    type == "string" or
+	    type == "tds.Vec" or
+	    type == nil) then
+		local data = tds.Vec()
+
+		if (size > 0) then
+			data:resize(size)
+		end
+
+		return data
+	end
+
+	if (type:match("torch.*Tensor")) then
+		return torch.Tensor(size):type(type)
+	end
+
+	assert(false, ("The type '%s' has not yet been implemented"):format(type))
 end}
 
 Dataseries.copy = argcheck{
@@ -187,10 +271,7 @@ _Return value_: number
 	{name="self", type="Dataseries"},
 	call=function(self)
 	if (self:is_tensor()) then
-		if (self.data:size():size() == 0) then
-			return 0
-		end
-		return self.data:size(1)
+		return self.data:nElement()
 	else
 		return #self.data
 	end
@@ -242,28 +323,38 @@ _Return value_: self
 	{name="self", type="Dataseries"},
 	{name="index", type="number", doc="The index to check"},
 	{name = "plus_one", type = "boolean", default = false,
-	 doc= "When adding rows, an index of size(1) + 1 is OK"},
-	 call = function(self, index, plus_one)
- 	if (plus_one) then
- 		if (not isint(index) or
- 				index < 0 or
- 				index > self:size() + 1) then
- 				assert(false, ("The index has to be an integer between 1 and %d - you've provided %s"):
- 					format(self:size() + 1, index))
- 		end
- 	else
- 		if (not isint(index) or
- 				index < 0 or
- 				index > self:size()) then
- 				assert(false, ("The index has to be an integer between 1 and %d - you've provided %s"):
- 					format(self:size(), index))
- 		end
- 	end
+	 doc= "Count next non-existing index as good. When adding rows, an index of size(1) + 1 is OK"},
+	call = function(self, index, plus_one)
+	if (plus_one) then
+		if (not isint(index) or
+				index < 0 or
+				index > self:size() + 1) then
+			assert(false, ("The index has to be an integer between 1 and %d - you've provided %s"):
+				format(self:size() + 1, index))
+		end
+	else
+		if (not isint(index) or
+				index < 0 or
+				index > self:size()) then
+			assert(false, ("The index has to be an integer between 1 and %d - you've provided %s"):
+				format(self:size(), index))
+		end
+	end
 
-	return self
+	return true
 end}
 
 Dataseries.is_tensor = argcheck{
+	doc = [[
+<a name="Dataseries.is_numerical">
+### Dataseries.is_numerical(@ARGP)
+
+Checks if tensor
+
+@ARGT
+
+_Return value_: boolean
+]],
 	{name="self", type="Dataseries"},
 	call=function(self)
 	if (torch.type(self.data):match(("torch.*Tensor"))) then
@@ -342,6 +433,9 @@ _Return value_: string
 	return torch.typename(self.data)
 end}
 
+-- TODO : Change method name to something more explicit to avoid confusion between 
+-- getting type and changing type (information VS action).
+-- name proposition : astype (inspired from pandas)
 Dataseries.type = argcheck{
 	doc=[[
 
@@ -395,22 +489,26 @@ _Return value_: self, boolean indicating successful conversion
 	{name="true_value", type="number",
 	 doc="The numeric value for true"},
 	call=function(self, false_value, true_value)
+
 	if (not self:is_boolean()) then
 		warning("The series isn't a boolean")
 		return self, false
 	end
 
-	local data = torch.ByteTensor(self:size())
+	-- Create a ByteTensor with the same size as the current dataseries and 
+	-- fill it with false values
+	local data = torch.ByteTensor(self:size()):fill(false_value)
+	
 	for i=1,self:size() do
 		local val = self:get(i)
+
 		if (not isnan(val)) then
 			if (val) then
 				data[i] = true_value
-			else
-				data[i] = false_value
 			end
 		end
 	end
+
 	self.data = data
 	self._variable_type = "integer"
 
@@ -433,8 +531,12 @@ _Return value_: self
 	 doc="The default value"},
 	call=function(self, default_value)
 
-	for i=1,self:size() do
-		self:set(i, default_value)
+	if (self:is_tensor()) then
+		self.data:fill(default_value)
+	else
+		for i=1,self:size() do
+			self:set(i, default_value)
+		end
 	end
 
 	return self
@@ -455,6 +557,9 @@ _Return value_: self
 	{name="default_value", type="number|string|boolean",
 	 doc="The default missing value", default=0},
 	call=function(self, default_value)
+	if (self:count_na() == 0) then
+		return self
+	end
 
 	if (self:is_categorical() and
 	    not self:has_cat_key("__nan__")) then
@@ -465,8 +570,21 @@ _Return value_: self
 		default_value = "__nan__"
 	end
 
-	for pos,_ in pairs(self.missing) do
-		self:set(pos, default_value)
+	if (self:is_tensor()) then
+		-- Get the mask differentiating values/missing_values
+		local mask = self:get_data_mask{missing = true}
+
+		-- Use this mask to only replace missing values
+		self.data:maskedFill(mask, default_value)
+
+		-- Reset missing values list
+		self.missing = tds.Hash()
+	else
+		-- Browse row by row
+		for pos,_ in pairs(self.missing) do
+			self:set(pos, default_value)
+		end
+		-- Here no need to reset missing values list, it is handled in `set()` method
 	end
 
 	return self
@@ -484,8 +602,10 @@ Converts the series into a string output
 _Return value_: string
 ]],
 	{name="self", type="Dataseries"},
-	{name="max_elmnts", type="number", default=20},
+	{name="max_elmnts", type="number", doc="Number of elements to convert", 
+		default=20},
 	call=function(self, max_elmnts)
+
 	max_elmnts = math.min(self:size(), max_elmnts)
 	ret = ("Type: %s (%s)\nLength: %d\n-----"):
 		format(self:get_variable_type(), self:type(), self:size())
@@ -500,6 +620,7 @@ _Return value_: string
 	return ret
 end}
 
+-- TODO : use same logic as bulk_load_csv to extract a subset
 Dataseries.sub = argcheck{
 	doc = [[
 <a name="Dataseries.sub">
@@ -517,10 +638,11 @@ _Return value_: Dataseries
 	call=function(self, start, stop)
 	stop = stop or self:size()
 
-	self:assert_is_index(start)
-	self:assert_is_index(stop)
 	assert(start <= stop,
 	      ("Start larger than stop, i.e. %d > %d"):format(start, stop))
+
+	self:assert_is_index(start)
+	self:assert_is_index(stop)
 
 	local ret = Dataseries.new(stop - start + 1, self:get_variable_type())
 	for idx = start,stop do
@@ -545,7 +667,7 @@ _Return value_: string
 	{name="other", type="Dataseries|table"},
 	call=function(self, other)
 
-	if (#self ~= #other) then
+	if (self:size() ~= #other) then
 		return false
 	end
 
@@ -556,6 +678,40 @@ _Return value_: string
 	end
 
 	return true
+end}
+
+Dataseries.get_data_mask = argcheck{
+	doc=[[
+<a name="Dataseries.get_data_mask">
+### Dataseries.get_data_mask(@ARGP)
+
+Retrieves a mask that can be used to select missing or active values
+
+@ARGT
+
+_Return value_: torch.ByteTensor
+]],
+	{name="self", type="Dataseries"},
+	{name="missing", type="boolean", default=false,
+	  doc="Set to true if you want only the missing values"},
+	call=function(self, missing)
+	local fill_value = 1
+	local missing_value = 0
+
+	if (missing) then
+		fill_value = 0
+		missing_value = 1
+	end
+
+	-- Create a ByteTensor with the same size as the current dataseries and 
+	-- fill it with defined filling value
+	local mask = torch.ByteTensor():resize(self:size()):fill(fill_value)
+	
+	for i,_ in pairs(self.missing) do
+		mask[i] = missing_value
+	end
+
+	return mask
 end}
 
 return Dataseries

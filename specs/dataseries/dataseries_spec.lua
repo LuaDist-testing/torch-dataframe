@@ -1,15 +1,23 @@
 require 'lfs'
 
--- Make sure that directory structure is always the same
-if (string.match(lfs.currentdir(), "/specs$")) then
+-- Ensure the test is launched within the specs/ folder
+assert(string.match(lfs.currentdir(), "specs")~=nil, "You must run this test in specs folder")
+
+local initial_dir = lfs.currentdir()
+
+-- Go to specs folder
+while (not string.match(lfs.currentdir(), "/specs$")) do
   lfs.chdir("..")
 end
 
--- Include Dataframe lib
-dofile('init.lua')
+local specs_dir = lfs.currentdir()
+lfs.chdir("..")-- one more directory and it is lib root
 
--- Go into specs so that the loading of CSV:s is the same as always
-lfs.chdir("specs")
+-- Include Dataframe lib
+dofile("init.lua")
+
+-- Go back into initial dir
+lfs.chdir(initial_dir)
 
 describe("#Core Dataseries functions", function()
 	describe("#Init", function()
@@ -51,6 +59,29 @@ describe("#Core Dataseries functions", function()
 			assert.are.same(ds:size(), 2)
 			assert.are.same(ds:get(1), "test")
 			assert.are.same(ds:get(2), "3.2a")
+			assert.are.same(ds:type(), "tds.Vec")
+		end)
+
+		it("create empty Dataseries", function()
+			local ds = Dataseries("string")
+			assert.are.same(ds:size(), 0)
+		end)
+
+		it("load a tensor without checking", function()
+			local tensor = torch.IntTensor({1,2,3,4,5})
+			local ds = Dataseries():load(tensor)
+			assert.are.same(ds:size(), 5)
+			assert.are.same(ds:get(1), 1)
+			assert.are.same(ds:get(5), 5)
+			assert.are.same(ds:type(), "torch.IntTensor")
+		end)
+
+		it("load a tds.Vec without checking", function()
+			local tensor = tds.Vec({"some","thing","else"})
+			local ds = Dataseries():load(tensor)
+			assert.are.same(ds:size(), 3)
+			assert.are.same(ds:get(1), "some")
+			assert.are.same(ds:get(3), "else")
 			assert.are.same(ds:type(), "tds.Vec")
 		end)
 	end)
@@ -125,6 +156,27 @@ describe("#Core Dataseries functions", function()
 			ds:remove(ds:size())
 			assert.are.same(ds:size(), 2)
 			assert.are.same(ds:get(2), 4)
+		end)
+
+		it("mutate all elements", function()
+			local ds = Dataseries{data = Df_Array(1,2,3,4)}
+			ds:mutate(function(var)
+				return var * 2
+			end)
+			assert.are.same(ds:size(), 4)
+			assert.are.same(ds:get(1), 2)
+			assert.are.same(ds:get(2), 4)
+			assert.are.same(ds:get(3), 6)
+			assert.are.same(ds:get(4), 8)
+
+			ds:mutate(function(var)
+				return tostring(var)
+			end, "string")
+			assert.are.same(ds:size(), 4)
+			assert.are.same(ds:get(1), "2")
+			assert.are.same(ds:get(2), "4")
+			assert.are.same(ds:get(3), "6")
+			assert.are.same(ds:get(4), "8")
 		end)
 
 		it("remove elements for tds.IntTensor", function()

@@ -5,16 +5,6 @@ local argcheck = require "argcheck"
 local tds = require "tds"
 local doc = require "argcheck.doc"
 
--- Since torchnet also uses docs we need to escape them when recording the documentation
-local torchnet
-if (doc.__record) then
-	doc.stop()
-	torchnet = require "torchnet"
-	doc.record()
-else
-	torchnet = require "torchnet"
-end
-
 doc[[
 
 ## Core functions
@@ -33,6 +23,7 @@ Creates and initializes a Dataframe class. Envoked through `local my_dataframe =
 
 @ARGT
 
+_Return value_: Dataframe
 ]],
 	{name="self", type="Dataframe"},
 	call=function(self)
@@ -40,6 +31,8 @@ Creates and initializes a Dataframe class. Envoked through `local my_dataframe =
 
 	self:_clean()
 	self.tostring_defaults = self:_get_init_tostring_dflts()
+
+	return self
 end}
 
 Dataframe.__init = argcheck{
@@ -90,6 +83,7 @@ as values. The column types are:
 
 @ARGT
 
+_Return value_: Dataframe
 ]],
 	overload=Dataframe.__init,
 	{name="self", type="Dataframe"},
@@ -110,7 +104,7 @@ as values. The column types are:
 		column_order = column_order.data
 		assert(#column_order == table.exact_length(schema),
 		       ("The schema (%d entries) doesn't match the number of columns (%d)"):
-		       format(#column_order, table.exact_length(schema)))
+		       format(table.exact_length(schema),#column_order))
 		for _,cn in ipairs(column_order) do
 			assert(schema[cn], "The schema doesn't have the column: " .. cn)
 		end
@@ -138,6 +132,77 @@ as values. The column types are:
 end}
 
 
+Dataframe.set_schema = argcheck{
+	doc =  [[
+No updates is performed on already inserted data. The purpose of this method
+is to prepare a Dataframe object.
+
+A schema is a hash table with the column names as keys and the column types
+as values. The column types are:
+- `boolean`
+- `integer`
+- `long`
+- `double`
+- `string` (this is stored as a `tds.Vec` and can be any value)
+
+@ARGT
+
+]],
+	{name="self", type="Dataframe"},
+	{name="schema", type="Df_Dict",
+	 doc="The schema to use for initializaiton"},
+	{name="column_order", type="Df_Array",
+	 doc="The column order"},
+	call=function(self, schema, column_order)
+	schema = schema.data
+
+	column_order = column_order.data
+	assert(#column_order == table.exact_length(schema),
+	       ("The schema (%d entries) doesn't match the number of columns (%d)"):
+	       format(#column_order, table.exact_length(schema)))
+	for _,col_name in pairs(column_order) do
+		assert(schema[col_name], "The schema doesn't have the column: " .. col_name)
+	end
+
+
+	self.dataset = {}
+	for _,col_name in pairs(column_order) do
+		self.dataset[col_name] = {}
+	end
+	self.column_order = column_order
+
+	return self
+end}
+
+Dataframe._init_with_schema = argcheck{
+	{name="self", type="Dataframe"},
+	{name="schema", type="Df_Dict", doc="Schema to init with"},
+	{name="column_order", type="Df_Array", doc="column order to respect", opt=true},
+	{name="number_rows", type="number", doc="size of the dataset to create", opt=true},
+	call=function(self, schema, column_order, number_rows)
+		self:__init()
+		self:_clean()
+
+		if (number_rows == nil or type(number_rows) ~= "number") then
+			number_rows = 0
+		end
+
+		if (torch.isTypeOf(column_order, "Df_Array")) then
+			column_order = column_order.data
+		else
+			column_order = schema.keys
+		end
+
+		self.column_order = column_order
+
+		for _,col_name in pairs(self.column_order) do
+			self.dataset[col_name] = Dataseries(schema.data[col_name])
+		end
+
+		return self
+	end
+}
+
 -- Private function for cleaning and reseting all data and meta data
 Dataframe._clean = argcheck{
 	{name="self", type="Dataframe"},
@@ -146,6 +211,7 @@ Dataframe._clean = argcheck{
 	self.column_order = {}
 	self.n_rows = 0
 	self:set_version()
+	collectgarbage()
 	return self
 end}
 
@@ -159,59 +225,140 @@ Dataframe._copy_meta = argcheck{
 
 	return to
 end}
--- Internal function to detect columns types
-Dataframe._infer_csvigo_schema = argcheck{
-	noordered=true,
+
+-- Internal function to detect columns types for current dataframe
+Dataframe._infer_schema = argcheck{
+	{name="self", type="Dataframe"},
+	{name="rows2explore", type="number",
+	 doc="The maximum number of rows to traverse",
+	 default=1e3},
+	call=function(self, rows2explore)
+
+	rows2explore = math.min(rows2explore, self:size())
+
+	local schema = {}
+
+	-- All columns of the current dataframe are browsed
+	for _,col_name in pairs(self.column_order) do
+		-- Counter containing a count for every types,
+		-- the type with the greater number of occurrences will be selected for the schema
+		local count_types = {["integer"]=0,["double"]=0,
+							["long"]=0,["string"]=0,["boolean"]=0}
+
+		-- save the current max value in the count_types table
+		-- default type is string
+		local max_key = "string" -- save the current max value in the count_types table
+
+		-- Rows are explored
+		for i=1,rows2explore do
+			local cell = self:get_column(col_name)[i]
+			local value_type = get_variable_type(cell)
+			local count_key = tostring(value_type)
+
+			-- nil values don't matter on the count
+			if (count_key ~= "nil") then
+				-- The counter of the right type is incremented
+				count_types[count_key] = count_types[count_key] + 1
+
+				-- If the new count for the current type is greater than the max value
+				if (count_types[count_key] > count_types[max_key]) then
+					max_key = count_key
+				end
+			end
+		end
+
+		-- If in a column there is at least one double, all the column is converted
+		-- to double to keep all the value
+		if ((max_key == "integer" or max_key == "long") and count_types["double"] > 0) then
+			max_key = "double"
+		end
+
+		schema[col_name] = max_key
+	end
+
+	return schema
+end}
+
+-- Internal function to detect columns types for data in params
+Dataframe._infer_schema = argcheck{
+	overload=Dataframe._infer_schema,
 	{name="self", type="Dataframe"},
 	{name="iterator", type="table", -- TODO: ask csvigo to add a class name
 	 doc="Data iterator where [i] returns the i:th row."},
 	{name="column_order", type="Df_Array",
 	 doc="The column order"},
 	{name="rows2explore", type="number",
-	 doc="The maximum number of rows to traverse",
-	 opt=true},
+	 doc="The maximum number of rows to traverse", default=1e3},
 	{name="first_data_row", type="number",
 	 doc="The first number in the iterator to use (i.e. skip header == 2)",
 	 default=1},
 	call=function(self, iterator, column_order, rows2explore, first_data_row)
-	local no_rows_2_investigate = math.min(rows2explore or 1e3, #iterator)
-	column_order = column_order.data
 
- 	local schema = {}
- 	for i = first_data_row,no_rows_2_investigate do
- 		local row = iterator[i]
- 		for idx,val in ipairs(row) do
-			local cn = column_order[idx]
- 			schema[cn] =
- 				get_variable_type{value = val,
- 				                  prev_type = schema[cn]}
- 		end
- 	end
+	len_iterator = #iterator or rows2explore
+	-- Avoid math.min bug when iterator is nil
+	rows2explore = math.min(rows2explore, len_iterator)
+	-- column_order = column_order.data
 
-	for i=1,#column_order do
-		local cn = column_order[i]
-		if (schema[cn] == nil) then
-			print("Warning: could not identify the row type for " .. cn)
-			if (rows2explore == nil) then
-				print("Trying to investigate if increasing the number from 1e3 to 1e4 rows helps")
-				return self:_infer_csvigo_schema{
-					iterator = iterator,
-					first_data_row = first_data_row,
-					column_order = Df_Array(column_order),
-					rows2explore = 1e4
-				}
-			else
-				print(("Assuming the most general type: string for '%s'"):format(cn))
-				schema[cn] = get_variable_type('some text')
+	local schema = {}
+	local schema_count = {}
+
+	-- save the current max value in the count_types table
+	-- default type is string
+	local max_keys = {}
+
+	-- We go from first_data_row to rows2explore in iterator
+	for i = first_data_row,rows2explore do
+		local row = iterator[i]
+		-- We go through the row's columns
+		for index,value in ipairs(row) do
+			local col_name = column_order[index]
+
+			-- If this is the first time we encounter the current column
+			-- A new type counter is created
+			if (type(schema_count[col_name]) == "nil") then
+				-- Counter containing a count for every types,
+				-- the type with the greater number of occurrences will be selected for the schema
+				schema_count[col_name] = {["integer"]=0,["double"]=0,
+						["long"]=0,["string"]=0,["boolean"]=0}
+
+				max_keys[col_name] = "string" --default type
+			end
+
+			local value_type = get_variable_type(value)
+			local count_key = tostring(value_type)
+
+			-- nil values don't matter on the count
+			if (count_key ~= "nil") then
+				-- The counter of the right type is incremented
+				schema_count[col_name][count_key] = schema_count[col_name][count_key] + 1
+
+				-- If the new count for the current type is greater than the max value
+				if (schema_count[col_name][count_key] > schema_count[col_name][max_keys[col_name]]) then
+					max_keys[col_name] = count_key
+				end
 			end
 		end
 	end
 
- 	return schema
- end}
+	-- Now that the csv file is parsed to rows2explore, the schema can be defined
+	for col_name,_ in pairs(schema_count) do
+		-- If in a column there is at least one double, all the column is converted
+		-- to double to keep all the value
+		if ((max_keys[col_name] == "integer" or max_keys[col_name] == "long")
+			and schema_count[col_name]["double"] > 0) then
+
+			max_keys[col_name] = "double"
+		end
+
+		schema[col_name] = max_keys[col_name]
+	end
+
+	return schema
+end}
 
 -- Internal function to detect columns types
-Dataframe._infer_data_schema = argcheck{
+Dataframe._infer_schema = argcheck{
+	overload=Dataframe._infer_schema,
 	{name="self", type="Dataframe"},
 	{name="data", type="Df_Dict",
 	 doc="Data for exploration. If omitted it defaults to the self.dataset"},
@@ -224,7 +371,9 @@ Dataframe._infer_data_schema = argcheck{
 	call=function(self, data, rows2explore, first_data_row)
 
 	data = data.data
+
 	local collength = nil
+
 	for key,column in pairs(data) do
 		local len = 1
 		if (type(column) == "table") then
@@ -246,24 +395,74 @@ Dataframe._infer_data_schema = argcheck{
 	rows2explore = math.min(rows2explore, collength)
 
 	local schema = {}
-	for cn,col_vals in pairs(data) do
+	local schema_count = {}
+
+	-- save the current max value in the count_types table
+	-- default type is string
+	local max_keys = {}
+
+	for col_name,col_vals in pairs(data) do
+
+		-- If this is the first time we encounter the current column
+		-- A new type counter is created
+		-- If the column is a dataseries no need to infer schema
+		if (type(schema_count[col_name]) == "nil" and
+			torch.isTypeOf(col_vals, "Dataseries") == false) then
+			-- Counter containing a count for every types,
+			-- the type with the greater number of occurrences will be selected for the schema
+			schema_count[col_name] = {["integer"]=0,["double"]=0,
+					["long"]=0,["string"]=0,["boolean"]=0}
+
+			max_keys[col_name] = "string" --default type
+		end
+
 		if (torch.isTypeOf(col_vals, "Dataseries")) then
-			schema[cn] = col_vals:get_variable_type()
+			schema[col_name] = col_vals:get_variable_type()
+		elseif ((type(col_vals) == "number" or
+				    type(col_vals) == "boolean" or
+				    type(col_vals) == "string") and
+				    type(col_vals) ~= "nil") then
+
+			local value_type = get_variable_type(col_vals)
+			local count_key = tostring(value_type)
+
+			-- The counter of the right type is incremented
+			schema_count[col_name][count_key] = schema_count[col_name][count_key] + 1
+
+			-- If the new count for the current type is greater than the max value
+			if (schema_count[col_name][count_key] > schema_count[col_name][max_keys[col_name]]) then
+				max_keys[col_name] = count_key
+			end
 		else
 			for i=first_data_row,rows2explore do
-				if (type(col_vals) == "number" or
-				    type(col_vals) == "boolean" or
-				    type(col_vals) == "string") then
-					schema[cn] =
-						get_variable_type{value = col_vals,
-						                  prev_type = schema[cn]}
-				elseif(col_vals[i]) then
-					schema[cn] =
-						get_variable_type{value = col_vals[i],
-						                  prev_type = schema[cn]}
+				local value_type = get_variable_type(col_vals[i])
+				local count_key = tostring(value_type)
+
+				-- nil values don't matter on the count
+				if (count_key ~= "nil") then
+					-- The counter of the right type is incremented
+					schema_count[col_name][count_key] = schema_count[col_name][count_key] + 1
+
+					-- If the new count for the current type is greater than the max value
+					if (schema_count[col_name][count_key] > schema_count[col_name][max_keys[col_name]]) then
+						max_keys[col_name] = count_key
+					end
 				end
 			end
 		end
+	end
+
+	-- Now that the data are parsed to rows2explore, the schema can be defined
+	for col_name,_ in pairs(schema_count) do
+		-- If in a column there is at least one double, all the column is converted
+		-- to double to keep all the value
+		if ((max_keys[col_name] == "integer" or max_keys[col_name] == "long")
+			and schema_count[col_name]["double"] > 0) then
+
+			max_keys[col_name] = "double"
+		end
+
+		schema[col_name] = max_keys[col_name]
 	end
 
 	return schema
@@ -368,7 +567,7 @@ _Return value_: self
 ]],
 	{name="self", type="Dataframe"},
 	call=function(self)
-	self.__version = "1.6.1"
+	self.__version = "1.7"
 	return self
 end}
 
@@ -511,7 +710,7 @@ _Return value_: Dataframe
 	{name = "self", type = "Dataframe"},
 	{name = "index", type = "number", doc="The index to investigate"},
 	{name = "plus_one", type = "boolean", default = false,
-	 doc= "When adding rows, an index of size(1) + 1 is OK"},
+	 doc= "Count next non-existing index as good. When adding rows, an index of size(1) + 1 is OK"},
 	call = function(self, index, plus_one)
 	if (plus_one) then
 		if (not isint(index) or
@@ -529,7 +728,7 @@ _Return value_: Dataframe
 		end
 	end
 
-	return self
+	return true
 end}
 
 return Dataframe

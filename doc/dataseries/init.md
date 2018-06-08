@@ -1,9 +1,12 @@
 # API documentation for [Dataseries](#__Dataseries__)
 - [Dataseries.`__init`](#Dataseries.__init)
+- [Dataseries.load](#Dataseries.load)
+- [Dataseries.new_storage](#Dataseries.new_storage)
 - [Dataseries.copy](#Dataseries.copy)
 - [Dataseries.size](#Dataseries.size)
 - [Dataseries.resize](#Dataseries.resize)
 - [Dataseries.assert_is_index](#Dataseries.assert_is_index)
+- [Dataseries.is_numerical](#Dataseries.is_numerical)
 - [Dataseries.is_numerical](#Dataseries.is_numerical)
 - [Dataseries.is_boolean](#Dataseries.is_boolean)
 - [Dataseries.is_string](#Dataseries.is_string)
@@ -15,6 +18,7 @@
 - [Dataseries.tostring](#Dataseries.tostring)
 - [Dataseries.sub](#Dataseries.sub)
 - [Dataseries.eq](#Dataseries.eq)
+- [Dataseries.get_data_mask](#Dataseries.get_data_mask)
 
 <a name="__Dataseries__">
 ## Dataseries
@@ -38,6 +42,24 @@ The class has the following metatable functions available:
 
 
 <a name="Dataseries.__init">
+### Dataseries.__init(self[, type])
+
+Creates and initializes an empty Dataseries. Envoked through `local my_series = Dataseries()`.
+
+The type can be:
+- boolean
+- integer
+- double
+- string
+- torch tensor or tds.Vec
+
+```
+({
+   self = Dataseries  -- 
+  [type = string]     -- The type of data storage to init. [default=string]
+})
+```
+
 ### Dataseries.__init(self, size[, type])
 
 Creates and initializes a Dataseries class. Envoked through `local my_series = Dataseries()`.
@@ -56,11 +78,58 @@ The type can be:
 })
 ```
 
+### Dataseries.__init(self, data)
+
+Creates and initializes a Dataseries with a given Tensor or Vector. Envoked through `local my_series = Dataseries(myData)`.
+
+The data can be a torch tensor or a tds.Vec.
 
 ```
 ({
    self = Dataseries             -- 
    data = torch.*Tensor|tds.Vec  -- 
+})
+```
+
+### Dataseries.__init(self, data[, max_elmnts4type])
+
+Creates and initializes a Dataseries with a given Df_Array. Envoked through `local my_series = Dataseries(Df_Array(myTable))`.
+
+```
+({
+   self            = Dataseries  -- 
+   data            = Df_Array    -- 
+  [max_elmnts4type = number]     -- The maximum number of elements to traverse before settling a type [default=1000]
+})
+```
+
+<a name="Dataseries.load">
+### Dataseries.load(self, data)
+
+Load a Tensor or tds.Vec without checking type or missing values.
+
+```
+({
+   self = Dataseries             -- 
+   data = torch.*Tensor|tds.Vec  -- data to load
+})
+```
+
+_Return value_: self
+<a name="Dataseries.new_storage">
+### Dataseries.new_storage(size[, type])
+
+Internal method to retrieve a storage element for the Dataseries. The type can be:
+- boolean
+- integer
+- double
+- string
+- torch tensor or tds.Vec
+
+```
+({
+   size = number   -- The size of the storage
+  [type = string]  -- The type of data storage to initialize [default=string]
 })
 ```
 
@@ -113,11 +182,23 @@ Assertion that checks if index is an integer and within the span of the series
 ({
    self     = Dataseries  -- 
    index    = number      -- The index to check
-  [plus_one = boolean]    -- When adding rows, an index of size(1) + 1 is OK [default=false]
+  [plus_one = boolean]    -- Count next non-existing index as good. When adding rows, an index of size(1) + 1 is OK [default=false]
 })
 ```
 
 _Return value_: self
+<a name="Dataseries.is_numerical">
+### Dataseries.is_numerical(self)
+
+Checks if tensor
+
+```
+({
+   self = Dataseries  -- 
+})
+```
+
+_Return value_: boolean
 <a name="Dataseries.is_numerical">
 ### Dataseries.is_numerical(self)
 
@@ -237,7 +318,7 @@ Converts the series into a string output
 ```
 ({
    self       = Dataseries  -- 
-  [max_elmnts = number]     --  [default=20]
+  [max_elmnts = number]     -- Number of elements to convert [default=20]
 })
 ```
 
@@ -269,3 +350,16 @@ Compares to Dataseries or table in order to see if they are identical
 ```
 
 _Return value_: string
+<a name="Dataseries.get_data_mask">
+### Dataseries.get_data_mask(self[, missing])
+
+Retrieves a mask that can be used to select missing or active values
+
+```
+({
+   self    = Dataseries  -- 
+  [missing = boolean]    -- Set to true if you want only the missing values [default=false]
+})
+```
+
+_Return value_: torch.ByteTensor

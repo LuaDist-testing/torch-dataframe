@@ -1,7 +1,7 @@
 #!/bin/bash
-echo -e "\e[32m+++++++++++++++++++++++++++++++\e[0m";
-echo -e "\e[32m+\e[0m Start torch-dataframe specs \e[32m+\e[0m";
-echo -e "\e[32m+++++++++++++++++++++++++++++++\e[0m";
+echo -e "\x1B[32m+++++++++++++++++++++++++++++++\x1B[0m";
+echo -e "\x1B[32m+\x1B[0m Start torch-dataframe specs \x1B[32m+\x1B[0m";
+echo -e "\x1B[32m+++++++++++++++++++++++++++++++\x1B[0m";
 echo "";
 
 VERSION="any"
@@ -29,7 +29,7 @@ var=0
 count=0
 failed_scripts=()
 exclude_tags="skip_version_$VERSION"
-for f in *_spec.lua; do
+for f in `find . -name "*_spec*"`; do
 	echo "";
 	echo "********************************************";
 	echo "Running specs in $f";
@@ -51,16 +51,18 @@ for f in *_spec.lua; do
 done
 
 echo ""
-echo -e "\e[93m==============================================\e[0m"
+echo -e "\x1B[93m==============================================\x1B[0m"
 if [ $var -gt 0 ]
 then
-	echo -e "Number of scripts failed: \e[31m$var\e[0m (total scripts: $count)"
+	echo -e "Number of scripts failed: \x1B[31m$var\x1B[0m (total scripts: $count)"
 	echo "Script(s) that failed:"
-	for i in "${failed_scripts[@]}"; do echo " -!- $i"; done
+	for i in "${failed_scripts[@]}"; do
+		echo " -!- $i";
+	done
 else
 	echo "Number of scripts failed: $var (total scripts: $count)"
 fi
 echo " - exclude-tags used: $exclude_tags"
-echo -e "\e[93m==============================================\e[0m"
+echo -e "\x1B[93m==============================================\x1B[0m"
 
 exit $var

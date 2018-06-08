@@ -1,6 +1,7 @@
 # API documentation for [single element functions](#__Single element functions__)
 - [Dataseries.get](#Dataseries.get)
 - [Dataseries.set](#Dataseries.set)
+- [Dataseries.mutate](#Dataseries.mutate)
 - [Dataseries.append](#Dataseries.append)
 - [Dataseries.remove](#Dataseries.remove)
 - [Dataseries.insert](#Dataseries.insert)
@@ -24,12 +25,12 @@ Gets a single or a set of elements.
 ```
 
 _Return value_: number|string|boolean
-If you provde a Df_Array you get back a Dataseries of elements
+If you provide a Df_Array you get back a Dataseries of elements
 
 ```
 ({
    self  = Dataseries  -- 
-   index = Df_Array    -- 
+   index = Df_Array    -- Indexes of wanted elements
 })
 ```
 
@@ -44,6 +45,20 @@ Sets a single element
    self  = Dataseries  -- 
    index = number      -- The index to set the value to
    value = *           -- The data to set
+})
+```
+
+_Return value_: self
+<a name="Dataseries.mutate">
+### Dataseries.mutate(self, mutation[, type])
+
+Modifies a dataseries. Takes a function where that each element is applied to.
+
+```
+({
+   self     = Dataseries  -- 
+   mutation = function    -- The function to apply to each value
+  [type     = string]     -- The return type of the data if other than the current
 })
 ```
 

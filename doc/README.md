@@ -97,6 +97,7 @@ add apropriate anchor tags during documentation.
   - [Dataframe.get](core/export_data.md#Dataframe.get)
 - **[Data loader functions](core/load_data.md)**
   - [Dataframe.load_csv](core/load_data.md#Dataframe.load_csv)
+  - [Dataframe.bulk_load_csv](core/load_data.md#Dataframe.bulk_load_csv)
   - [Dataframe.load_table](core/load_data.md#Dataframe.load_table)
   - [Dataframe.`_clean_columns`](core/load_data.md#Dataframe._clean_columns)
 - **[Metatable functions](core/metatable.md)**
@@ -116,6 +117,7 @@ add apropriate anchor tags during documentation.
   - [Dataframe.`_to_html`](core/output.md#Dataframe._to_html)
 - **[Row functions](core/row.md)**
   - [Dataframe.get_row](core/row.md#Dataframe.get_row)
+  - [Dataframe.insert](core/row.md#Dataframe.insert)
   - [Dataframe.insert](core/row.md#Dataframe.insert)
   - [Dataframe.append](core/row.md#Dataframe.append)
   - [Dataframe.rbind](core/row.md#Dataframe.rbind)
@@ -150,10 +152,13 @@ add apropriate anchor tags during documentation.
 
 - **[Dataseries](dataseries/init.md)**
   - [Dataseries.`__init`](dataseries/init.md#Dataseries.__init)
+  - [Dataseries.load](dataseries/init.md#Dataseries.load)
+  - [Dataseries.new_storage](dataseries/init.md#Dataseries.new_storage)
   - [Dataseries.copy](dataseries/init.md#Dataseries.copy)
   - [Dataseries.size](dataseries/init.md#Dataseries.size)
   - [Dataseries.resize](dataseries/init.md#Dataseries.resize)
   - [Dataseries.assert_is_index](dataseries/init.md#Dataseries.assert_is_index)
+  - [Dataseries.is_numerical](dataseries/init.md#Dataseries.is_numerical)
   - [Dataseries.is_numerical](dataseries/init.md#Dataseries.is_numerical)
   - [Dataseries.is_boolean](dataseries/init.md#Dataseries.is_boolean)
   - [Dataseries.is_string](dataseries/init.md#Dataseries.is_string)
@@ -165,6 +170,7 @@ add apropriate anchor tags during documentation.
   - [Dataseries.tostring](dataseries/init.md#Dataseries.tostring)
   - [Dataseries.sub](dataseries/init.md#Dataseries.sub)
   - [Dataseries.eq](dataseries/init.md#Dataseries.eq)
+  - [Dataseries.get_data_mask](dataseries/init.md#Dataseries.get_data_mask)
 - **[Categorical functions](dataseries/categorical.md)**
   - [Dataseries.as_categorical](dataseries/categorical.md#Dataseries.as_categorical)
   - [Dataseries.add_cat_key](dataseries/categorical.md#Dataseries.add_cat_key)
@@ -184,6 +190,7 @@ add apropriate anchor tags during documentation.
 - **[Single element functions](dataseries/sngl_elmnt_ops.md)**
   - [Dataseries.get](dataseries/sngl_elmnt_ops.md#Dataseries.get)
   - [Dataseries.set](dataseries/sngl_elmnt_ops.md#Dataseries.set)
+  - [Dataseries.mutate](dataseries/sngl_elmnt_ops.md#Dataseries.mutate)
   - [Dataseries.append](dataseries/sngl_elmnt_ops.md#Dataseries.append)
   - [Dataseries.remove](dataseries/sngl_elmnt_ops.md#Dataseries.remove)
   - [Dataseries.insert](dataseries/sngl_elmnt_ops.md#Dataseries.insert)
@@ -240,8 +247,18 @@ add apropriate anchor tags during documentation.
 - **[Df_ParallelIterator](helper_classes/11_paralleliterator.md)**
   - [Df_ParallelIterator](helper_classes/11_paralleliterator.md#Df_ParallelIterator)
 - **[Df_Tbl](helper_classes/20_tbl.md)**
+  - [Df_Tbl.`__init`](helper_classes/20_tbl.md#Df_Tbl.__init)
+  - [Df_Tbl.#](helper_classes/20_tbl.md#Df_Tbl.#)
 - **[Df_Dict](helper_classes/21_dict.md)**
+  - [Df_Dict.`__init`](helper_classes/21_dict.md#Df_Dict.__init)
+  - [Df_Dict.check_lengths()](helper_classes/21_dict.md#Df_Dict.check_lengths)
+  - [Df_Dict.set_keys](helper_classes/21_dict.md#Df_Dict.set_keys)
+  - [Df_Dict.[]](helper_classes/21_dict.md#Df_Dict.[])
+  - [Df_Dict.#](helper_classes/21_dict.md#Df_Dict.#)
 - **[Df_Array](helper_classes/22_array.md)**
+  - [Df_Array.`__init`](helper_classes/22_array.md#Df_Array.__init)
+  - [Df_Array.[]](helper_classes/22_array.md#Df_Array.[])
+  - [Df_Array.#](helper_classes/22_array.md#Df_Array.#)
 
 ## Utils
 
