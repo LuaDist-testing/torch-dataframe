@@ -1,55 +1,40 @@
-require 'lfs'
-
-local file_exists = function(name)
-   local f=io.open(name,"r")
-   if f~=nil then io.close(f) return true else return false end
-end
-
--- If we're in development mode the default path should be the current
-local dataframe_path = "./?.lua"
-local search_4_file = "Extensions/load_batch"
-if (not file_exists(string.gsub(dataframe_path, "?", search_4_file))) then
-  -- split all paths according to ;
-  for path in string.gmatch(package.path, "[^;]+;") do
-    -- remove trailing ;
-    path = string.sub(path, 1, string.len(path) - 1)
-    if (file_exists(string.gsub(path, "?", "Dataframe/" .. search_4_file))) then
-      dataframe_path = string.gsub(path, "?", "Dataframe/?")
-      break;
-    end
-  end
-  if (dataframe_path == nil) then
-    error("Can't find package files in search path: " .. tostring(package.path))
-  end
-end
+local paths = require 'paths'
+local dataframe_path = paths.thisfile():gsub("init.lua$", "?.lua")
 
 -- Make utils available to all
 local utils_file = string.gsub(dataframe_path,"?", "utils")
 assert(loadfile(utils_file))()
 
--- Load all helper classes
-help_clss_path = string.gsub(dataframe_path, "[^/]+$", "") .. "helper_classes/"
-for extension_file,_ in lfs.dir (help_clss_path) do
-  if (string.match(extension_file, "[.]lua$")) then
-    local file = help_clss_path .. extension_file
-    assert(loadfile(file))()
-  end
-end
-
 -- Custom argument checks
 local argcheck_file = string.gsub(dataframe_path,"?", "argcheck")
 assert(loadfile(argcheck_file))()
 
+-- Load all helper classes
+hlpr_clss_path = string.gsub(dataframe_path, "[^/]+$", "") .. "helper_classes/"
+local hlpr_files = paths.get_sorted_files(hlpr_clss_path)
+for _,hlpr_file in pairs(hlpr_files) do
+  local file = hlpr_clss_path .. hlpr_file
+  assert(loadfile(file))(hlpr_clss_path)
+end
+
+-- Load the main file
 local main_file = string.gsub(dataframe_path,"?", "main")
 local Dataframe = assert(loadfile(main_file))()
 
--- Load all extensions, i.e. .lua files in Extensions directory
-ext_path = string.gsub(dataframe_path, "[^/]+$", "") .. "Extensions/"
-for extension_file,_ in lfs.dir (ext_path) do
-  if (string.match(extension_file, "[.]lua$")) then
-    local file = ext_path .. extension_file
-    assert(loadfile(file))(Dataframe)
-  end
+-- Load all extensions, i.e. .lua files in extensions directory
+ext_path = string.gsub(dataframe_path, "[^/]+$", "") .. "extensions/"
+local ext_files = paths.get_sorted_files(ext_path)
+for _, extension_file in pairs(ext_files) do
+  local file = ext_path .. extension_file
+  assert(loadfile(file))(Dataframe)
+end
+
+-- Load all sub classes
+sub_clss_path = string.gsub(dataframe_path, "[^/]+$", "") .. "sub_classes/"
+local sub_files = paths.get_sorted_files(sub_clss_path)
+for _,sub_file in pairs(sub_files) do
+  local file = sub_clss_path .. sub_file
+  assert(loadfile(file))(Dataframe, sub_clss_path)
 end
 
 return Dataframe

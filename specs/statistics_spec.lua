@@ -1,5 +1,4 @@
 require 'lfs'
-require 'torch'
 
 -- Make sure that directory structure is always the same
 if (string.match(lfs.currentdir(), "/specs$")) then
@@ -7,7 +6,7 @@ if (string.match(lfs.currentdir(), "/specs$")) then
 end
 
 -- Include Dataframe lib
-paths.dofile('init.lua')
+dofile('init.lua')
 
 -- Go into specs so that the loading of CSV:s is the same as always
 lfs.chdir("specs")
@@ -19,50 +18,58 @@ describe("Usual statistics functions", function()
 	describe("Value counting",function()
 
 		it("Counts integer occurrences",function()
-			assert.are.same(df:value_counts('Col A'),
+			assert.are.same(df:value_counts{column_name='Col A', as_dataframe=false},
 				{[1] = 1, [2] = 1, [3] = 1})
 		end)
 
 		it("Counts string occurrences",function()
-			assert.are.same(df:value_counts('Col B'), {A=1, B=2})
+			assert.are.same(df:value_counts{column_name='Col B', as_dataframe=false}, {A=1, B=2})
 		end)
 
 		it("Doesn't count missing values",function()
-			assert.are.same(df:value_counts('Col C'), {[8]=1, [9]=1})
+			assert.are.same(df:value_counts{column_name='Col C', as_dataframe=false}, {[8]=1, [9]=1})
 		end)
 
 		it("Count missing values when specified",function()
-			assert.are.same(df:value_counts{column_name='Col C',dropna=false},
+			assert.are.same(df:value_counts{column_name='Col C', dropna=false, as_dataframe=false},
 				{[8]=1, [9]=1, ["_missing_"] = 1})
 		end)
 
+		it("Doesn't count missing values when categorical",function()
+			df:as_categorical('Col C')
+			assert.are.same(df:value_counts{column_name='Col C', as_dataframe=false}, {[8]=1, [9]=1})
+
+			df:as_string('Col C')
+			assert.are.same(df:value_counts{column_name='Col C', as_dataframe=false}, {[8]=1, [9]=1})
+		end)
+
 		it("Count integer frequencies when 'normalize' argument is set to true",function()
-			assert.are.same(df:value_counts{column_name ='Col A',normalize = true},
+			assert.are.same(df:value_counts{column_name ='Col A',normalize = true, as_dataframe=false},
 				{[1] = 1/3, [2] = 1/3, [3] = 1/3})
 		end)
 
 		it("Count string frequencies when 'normalize' argument is set to true",function()
-			assert.are.same(df:value_counts{column_name ='Col B',normalize = true},
+			assert.are.same(df:value_counts{column_name ='Col B',normalize = true, as_dataframe=false},
 				{A = 1/3, B = 2/3})
 		end)
 
 		it("Count frequencies avoiding missing values when 'normalize' argument is set to true",function()
-			assert.are.same(df:value_counts{column_name ='Col C',normalize = true},
+			assert.are.same(df:value_counts{column_name ='Col C',normalize = true, as_dataframe=false},
 				{[8]=0.5, [9]=0.5})
 		end)
 
 		it("Count frequencies with missing values when 'normalize' argument is set to true",function()
-			assert.are.same(df:value_counts{column_name ='Col C',normalize = true,dropna=false},
+			assert.are.same(df:value_counts{column_name ='Col C',normalize = true,dropna=false, as_dataframe=false},
 				{[8]=1/3, [9]=1/3, ["_missing_"] = 1/3})
 		end)
 
 		it("Count all columns values",function()
-			assert.are.same(df:value_counts(),{['Col C'] = {[8]=1, [9]=1},
+			assert.are.same(df:value_counts{as_dataframe=false},{['Col C'] = {[8]=1, [9]=1},
 		         ['Col A'] = {[1] = 1, [2] = 1, [3] = 1}})
 		end)
 
 		it("Count all colmns values with missing values",function()
-			assert.are.same(df:value_counts{dropna=false},
+			assert.are.same(df:value_counts{dropna=false, as_dataframe=false},
 		         {['Col C'] = {[8]=1, [9]=1, ["_missing_"] = 1},
 		         ['Col A'] = {[1] = 1, [2] = 1, [3] = 1, ["_missing_"] = 0}})
 		end)
@@ -73,37 +80,43 @@ describe("Usual statistics functions", function()
 		local df = Dataframe("./data/advanced_short.csv")
 
 		it("Get the mode for a specific column",function()
-			assert.are.same(df:get_mode{column_name ='Col A', normalize = false},
+			assert.are.same(df:get_mode{column_name ='Col A', normalize = false, as_dataframe = false},
 		                   {[1] = 1, [2] = 1, [3] = 1})
 		end)
 
+		it("Check that mode with dataframe",function()
+			local mode_df = df:get_mode{column_name ='Col A', normalize = false, as_dataframe = true}
+			assert.are.same(mode_df:get_column('key'), {1, 2, 3})
+			assert.are.same(mode_df:get_column('value'), {1, 1, 1})
+			assert.are.same(df:get_mode():size(1), 3 + 0 + 2, "The mode for Col B shouldn't appear")
+		end)
+
 		it("Get the mode for a specific column with 'normalize' option",function()
-			assert.are.same(df:get_mode{column_name ='Col A', normalize = true},
+			assert.are.same(df:get_mode{column_name ='Col A', normalize = true, as_dataframe = false},
 			                   {[1] = 1/3, [2] = 1/3, [3] = 1/3})
-			assert.are.same(df:get_mode{column_name ='Col B', normalize = true},
+			assert.are.same(df:get_mode{column_name ='Col B', normalize = true, as_dataframe = false},
 			                   {B = 2/3})
 		end)
 
 		it("Get mode for multiple columns",function()
 			df:load_table{data=Df_Dict({['A']={3,3,2},['B']={10,11,12}})}
-			assert.are.same(df:get_mode{normalize = true},
+			assert.are.same(df:get_mode{normalize = true, as_dataframe = false},
 			                {A ={[3] = 2/3},
 			                 B ={[10] = 1/3, [11] = 1/3, [12] = 1/3}})
 		end)
 	end)
 
 	describe("Max value",function()
+		df = Dataframe("./data/advanced_short.csv")
 		it("Retrieves the max value of all numerical columns",function()
-			df = Dataframe("./data/advanced_short.csv")
-
-			assert.are.same(df:get_max_value(), {3, 9})
-			assert.are.same(dfs:get_max_value(), {4, .5, 9999999999})
+			assert.are.same(df:get_max_value{as_dataframe = false}, {3, 9})
+			assert.are.same(dfs:get_max_value{as_dataframe = false}, {4, .5, 9999999999})
 
 			df:as_categorical('Col B')
-			assert.are.same(df:get_max_value(), {3, 2, 9})
+			assert.are.same(df:get_max_value{as_dataframe = false}, {3, 2, 9})
 
 			df:as_categorical('Col C')
-			assert.are.same(df:get_max_value(), {3, 2, 2})
+			assert.are.same(df:get_max_value{as_dataframe = false}, {3, 2, 2})
 		end)
 
 		it("Retrieves the max value of a specific column",function()
@@ -116,17 +129,18 @@ describe("Usual statistics functions", function()
 	end)
 
 	describe("Min value",function()
-		it("Retrieves the min value of all numerical columns",function()
-			df = Dataframe("./data/advanced_short.csv")
+		df = Dataframe("./data/advanced_short.csv")
 
-			assert.are.same(df:get_min_value(), {1, 8})
-			assert.are.same(dfs:get_min_value(), {1, .2, -222})
+		it("Retrieves the min value of all numerical columns",function()
+
+			assert.are.same(df:get_min_value{as_dataframe = false}, {1, 8})
+			assert.are.same(dfs:get_min_value{as_dataframe = false}, {1, .2, -222})
 
 			df:as_categorical('Col B')
-			assert.are.same(df:get_min_value(), {1, 1, 8})
+			assert.are.same(df:get_min_value{as_dataframe = false}, {1, 1, 8})
 
 			df:as_categorical('Col C')
-			assert.are.same(df:get_min_value(), {1, 1, 1})
+			assert.are.same(df:get_min_value{as_dataframe = false}, {1, 1, 1})
 		end)
 
 		it("Retrieves the min value of a specific column",function()

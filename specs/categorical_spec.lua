@@ -1,5 +1,4 @@
 require 'lfs'
-require 'torch'
 
 -- Make sure that directory structure is always the same
 if (string.match(lfs.currentdir(), "/specs$")) then
@@ -7,7 +6,7 @@ if (string.match(lfs.currentdir(), "/specs$")) then
 end
 
 -- Include Dataframe lib
-paths.dofile('init.lua')
+dofile('init.lua')
 
 -- Go into specs so that the loading of CSV:s is the same as always
 lfs.chdir("specs")
@@ -35,6 +34,16 @@ describe("Categorical column", function()
 		assert.is_true(a:is_categorical('Col C'))
 		assert.is_true(not a:is_categorical('Col A'))
 	end)
+
+	it("Check that reversion works",function()
+		a:as_string('Col C')
+
+		assert.is_false(a:is_categorical('Col C'))
+		assert.are.same(a:get_column{column_name='Col C'}[1], 8)
+		assert.is_true(isnan(a:get_column{column_name='Col C'}[2]))
+		assert.are.same(a:get_column{column_name='Col C'}[3], 9)
+	end)
+
 
 	describe("Conversion",function()
 		local a = Dataframe("./data/advanced_short.csv")
@@ -115,6 +124,59 @@ describe("Categorical column", function()
 		assert.are.same(a:unique{column_name ='Col B', as_keys = true, as_raw = true}, {[1] = 1, [2] = 2})-- "Failed to get raw data as keys"
 	end)
 
+	it("Order the categories", function()
+		local b = Dataframe(Df_Dict{a={"b", "a", "c"}})
+		b:as_categorical('a')
+
+		assert.are.same(b:from_categorical(Df_Array("a", "b", "c"), 'a'),
+		                {1,2,3})
+	end)
+
+	it("Specify levels in a different order than sorted", function()
+		local b = Dataframe(Df_Dict{a={"b", "a", "c"}})
+		b:as_categorical{column_name = 'a',
+		                 levels = Df_Array("a", "c", "b")}
+
+		assert.are.same(b:from_categorical(Df_Array("a", "b", "c"), 'a'),
+		                {1,3,2})
+
+		b:as_string('a')
+		b:as_categorical('a', Df_Array("b", "a", "c"))
+
+		assert.are.same(b:from_categorical(Df_Array("a", "b", "c"), 'a'),
+		                {2,1,3})
+	end)
+
+	it("Specify fewer levels than present", function()
+		local b = Dataframe(Df_Dict{a={"b", "a", "c"}})
+		b:as_categorical('a', Df_Array("a", "b"))
+
+		assert.are.same(b:get_column('a', true)[1], 2)
+		assert.are.same(b:get_column('a', true)[2], 1)
+		assert.is_true(isnan(b:get_column('a', true)[3]))
+	end)
+
+	it("Specify labels", function()
+		local b = Dataframe(Df_Dict{a={"b", "a", "c"}})
+		b:as_categorical('a', Df_Array("a", "b"), Df_Array("A", "B"))
+
+		assert.are.same(b:get_column('a')[1], "B")
+		assert.are.same(b:get_column('a')[2], "A")
+		assert.is_true(isnan(b:get_column('a', true)[3]))
+	end)
+
+	it("Specify levels in a different order than sorted", function()
+		local b = Dataframe(Df_Dict{a={"b", "a", "c"}})
+		b:as_categorical{column_name = 'a',
+		                 exclude=Df_Array("a","B")}
+
+		assert.are.same(b:get_column('a')[1], "b")
+		assert.are.same(b:get_column('a')[3], "c")
+		assert.is_true(isnan(b:get_column('a', true)[2]))
+		assert.are.same(b:from_categorical(Df_Array("b", "c"), 'a'),
+		                {1,2})
+	end)
+
 	it("Insert new columns",function()
 		local a = Dataframe("./data/advanced_short.csv")
 
@@ -124,7 +186,7 @@ describe("Categorical column", function()
 			["Col B"] = "C",
 			["Col C"] = 10
 		}
-		a:insert(Df_Dict(new_data))
+		a:append(Df_Dict(new_data))
 		assert.are.same(a:get_cat_keys('Col B'), {A=1, B=2, C=3})
 	end)
 
@@ -254,7 +316,7 @@ describe("Categorical column", function()
 			["Col C"] = 10
 		}
 
-		ret_val:insert(Df_Dict(new_data))
+		ret_val:append(Df_Dict(new_data))
 		assert.are.same(ret_val:from_categorical(Df_Array('A', 'B', 'C'), 'Col B'),
 		{1, 2, 3})-- "The categorical should add the new value as the last number"
 
@@ -280,24 +342,25 @@ describe("Categorical column", function()
 
 		a:as_categorical('Col B')
 		local ret = a:value_counts('Col B')
-		assert.is.equal(ret["B"],2)
-		assert.is.equal(ret["A"],1)
+		assert.is.equal(ret:where('values', 'B'):get_column('count')[1], 2)
+		assert.is.equal(ret:where('values', 'A'):get_column('count')[1], 1)
+
 		local ret = a:value_counts('Col A')
-		assert.are.same(ret, {[1] = 1,
-		[2] = 1,
-		[3] = 1})
-		a:as_categorical('Col A')
-		local ret = a:value_counts('Col A')
-		assert.are.same(ret, {[1] = 1,
-		[2] = 1,
-		[3] = 1})
+		assert.are.same(ret:get_column('count'), {1,1,1})
+		assert.are.same(ret:get_column('values'), {1,2,3})
+
 		local ret = a:value_counts('Col C')
-		assert.are.same(ret, {[8] = 1,
-		[9] = 1})
+		assert.are.same(ret:get_column('count'), {1,1})
+		local tmp = ret:get_column('values')
+		table.sort(tmp)
+		assert.are.same(tmp, {8,9})
+
 		a:as_categorical('Col C')
 		local ret = a:value_counts('Col C')
-		assert.are.same(ret, {[8] = 1,
-		[9] = 1})
+		assert.are.same(ret:get_column('count'), {1,1})
+		local tmp = ret:get_column('values')
+		table.sort(tmp)
+		assert.are.same(tmp, {8,9})
 	end)
 
 	it(" Exports to tensor",function()
@@ -332,5 +395,4 @@ describe("Categorical column", function()
 
 		assert.is_true(sum < 1e-5)-- "The difference between the columns should be < 10^-5, it is currently " .. sum
 	end)
-
 end)

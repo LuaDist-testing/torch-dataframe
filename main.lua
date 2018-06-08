@@ -1,8 +1,18 @@
-	-- Main Dataframe file
+-- Main Dataframe file
 require 'torch'
 
 local argcheck = require "argcheck"
 local doc = require "argcheck.doc"
+
+-- Since torchnet also uses docs we need to escape them when recording the documentation
+local torchnet
+if (doc.__record) then
+	doc.stop()
+	torchnet = require "torchnet"
+	doc.record()
+else
+	torchnet = require "torchnet"
+end
 
 doc[[
 
@@ -11,7 +21,7 @@ doc[[
 ]]
 
 -- create class object
-local Dataframe = torch.class('Dataframe')
+local Dataframe, parent_class = torch.class('Dataframe', 'tnt.Dataset')
 
 Dataframe.__init = argcheck{
 	doc =  [[
@@ -22,21 +32,21 @@ Creates and initializes a Dataframe class. Envoked through `local my_dataframe =
 
 @ARGT
 
-_Return value_: Dataframe
 ]],
 	{name="self", type="Dataframe"},
 	call=function(self)
+	parent_class.__init(self)
+
 	self:_clean()
-	self.print = {no_rows = 10, max_col_width = 20}
+	self.tostring_defaults = self:_get_init_tostring_dflts()
 end}
 
 Dataframe.__init = argcheck{
 	doc =  [[
-Read in an csv-file
+Read in an csv-filef
 
 @ARGT
 
-_Return value_: Dataframe
 ]],
 	overload=Dataframe.__init,
 	{name="self", type="Dataframe"},
@@ -52,14 +62,19 @@ Directly input a table
 
 @ARGT
 
-_Return value_: Dataframe
 ]],
 	overload=Dataframe.__init,
 	{name="self", type="Dataframe"},
 	{name="data", type="Df_Dict", doc="The data to read in"},
-	call=function(self, data)
+	{name="column_order", type="Df_Array", default=false,
+	 doc="The order of the column (has to be array and _not_ a dictionary)"},
+	call=function(self, data, column_order)
 	self:__init()
-	self:load_table{data=data,verbose=false}
+	if (column_order) then
+		self:load_table{data=data, column_order=column_order}
+	else
+		self:load_table{data=data}
+	end
 end}
 
 -- Private function for cleaning and reseting all data and meta data
@@ -72,6 +87,8 @@ Dataframe._clean = argcheck{
 	self.n_rows = 0
 	self.categorical = {}
 	self.schema = {}
+	self:set_version()
+	return self
 end}
 
 -- Private function for copying core settings to new Dataframe
@@ -81,7 +98,7 @@ Dataframe._copy_meta = argcheck{
 	call=function(self, to)
 	to.column_order = clone(self.column_order)
 	to.schema = clone(self.schema)
-	to.print = clone(self.print)
+	to.tostring_defaults = clone(self.tostring_defaults)
 	to.categorical = clone(self.categorical)
 
 	return to
@@ -113,8 +130,11 @@ Dataframe._refresh_metadata = argcheck{
 		 end
 	end
 
+
 	self.columns = keyset
 	self.n_rows = rows
+
+	return self
 end}
 
 -- Internal function to detect columns types
@@ -123,6 +143,12 @@ Dataframe._infer_schema = argcheck{
 	{name="max_rows", type="number", doc="The maximum number of rows to traverse", default=1e3},
 	call=function(self, max_rows)
 	local rows_to_explore = math.min(max_rows, self.n_rows)
+
+	local is_empty = function(val)
+		return val == nil or
+			val == '' or
+			isnan(val)
+	end
 
 	for _,key in pairs(self.columns) do
 		local is_a_numeric_column = true
@@ -133,11 +159,8 @@ Dataframe._infer_schema = argcheck{
 			for i = 1, rows_to_explore do
 				-- If the current cell is not a number and not nil (in case of empty cell, type inference is not compromised)
 				local val = self.dataset[key][i]
-				if tonumber(val) == nil and
-				  val ~= nil and
-					val ~= '' and
-					not isnan(val)
-					then
+				if (tonumber(val) == nil and
+				    not is_empty(val)) then
 					is_a_numeric_column = false
 					break
 				end
@@ -148,9 +171,28 @@ Dataframe._infer_schema = argcheck{
 				for i = 1, self.n_rows do
 					self.dataset[key][i] = tonumber(self.dataset[key][i])
 				end
+			else
+				local is_a_boolean_column = true
+				-- Check if we have a boolean column
+				for i = 1, rows_to_explore do
+					local val = self.dataset[key][i]
+					if (torch.type(val) ~= "boolean" and
+					    not is_empty(val)) then
+						is_a_boolean_column = false
+						break
+					end
+				end
+
+				if (is_a_boolean_column) then
+					self.schema[key] = 'boolean'
+					-- TODO: Should string boolean columns be converted to boolean values?
+				end
+
 			end
 		end
 	end
+
+	return self
 end}
 
 --
@@ -176,185 +218,6 @@ _Return value_: table
 	return {rows=self.n_rows,cols=#self.columns}
 end}
 
-Dataframe.size = argcheck{
-	doc =  [[
-<a name="Dataframe.size">
-### Dataframe.size(@ARGP)
-
-Returns the number of rows and columns in a tensor
-
-@ARGT
-
-_Return value_: tensor (rows, columns)
-]],
-	{name="self", type="Dataframe"},
-	call=function(self)
-	return torch.IntTensor({self.n_rows,#self.columns})
-end}
-
-Dataframe.size = argcheck{
-	doc =  [[
-By providing dimension you can get only that dimension, row == 1, col == 2
-
-@ARGT
-
-_Return value_: integer
-]],
-	overload=Dataframe.size,
-	{name="self", type="Dataframe"},
-	{name="dim", type="number", doc="The dimension of interest"},
-	call=function(self, dim)
-	assert(isint(dim), "The dimension isn't an integer: " .. tostring(dim))
-	assert(dim == 1 or dim == 2, "The dimension can only be between 1 and 2 - you've provided: " .. dim)
-	if (dim == 1) then
-		return self.n_rows
-	end
-
-	return #self.columns
-end}
-
-Dataframe.insert = argcheck{
-	doc =  [[
-<a name="Dataframe.insert">
-### Dataframe.insert(@ARGP)
-
-Inserts a row or multiple rows into database. Automatically appends to the Dataframe.
-
-@ARGT
-
-_Return value_: void
-]],
-	{name="self", type="Dataframe"},
-	{name="rows", type="Df_Dict", doc="Insert values to the dataset"},
-	call=function(self, rows)
-	rows = rows.data
-	if (self:size(1) == 0) then
-		return self:load_table{data = Df_Dict(rows)}
-	end
-
-	local no_rows_2_insert = 0
-	local new_columns = {}
-	for k,v in pairs(rows) do
-		-- Force all input into tables
-		if (type(v) ~= 'table') then
-			v = {v}
-			rows[k] = v
-		end
-
-		-- Check input size
-		if (no_rows_2_insert == 0) then
-			no_rows_2_insert = table.maxn(v)
-		else
-			assert(no_rows_2_insert == table.maxn(v),
-			       "The rows aren't the same between the columns." ..
-			       " The " .. k .. " column has " .. " " .. table.maxn(v) .. " rows" ..
-			       " while previous columns had " .. no_rows_2_insert .. " rows")
-		end
-
-		if (not table.has_element(self.columns, k)) then
-			self:add_column(k)
-		end
-	end
-
-	for _, column_name in pairs(self.columns) do
-		-- If the column is not currently inserted by the user
-		if rows[column_name] == nil then
-			-- Default rows are inserted with nan values (0/0)
-			for j = 1,no_rows_2_insert do
-				table.insert(self.dataset[column_name], 0/0)
-			end
-		else
-			for j = 1,no_rows_2_insert do
-				value = rows[column_name][j]
-				if (self:is_categorical(column_name) and
-				    not isnan(value)) then
-					vale = self:_get_raw_cat_key(column_name, value)
-				end -- TODO: Should we convert string columns with '' to nan?
-				self.dataset[column_name][self.n_rows + j] = value
-			end
-		end
-	end
-
-	self:_refresh_metadata()
-	self:_infer_schema()
-end}
-
-Dataframe.remove_index = argcheck{
-	doc =  [[
-<a name="Dataframe.remove_index">
-### Dataframe.remove_index(@ARGP)
-
-Deletes a given row
-
-@ARGT
-
-_Return value_: void
-]],
-	{name="self", type="Dataframe"},
-	{name="index", type="number", doc="The row index to remove"},
-	call=function(self, index)
-	assert(isint(index), "The index should be an integer, you've provided " .. tostring(index))
-	assert(index > 0 and index <= self.n_rows, ("The index (%d) is outside the bounds 1-%d"):format(index, self.n_rows))
-
-	for i = 1,#self.columns do
-		table.remove(self.dataset[self.columns[i]],index)
-	end
-	self.n_rows = self.n_rows - 1
-
-	self:_refresh_metadata()
-end}
-
-Dataframe.unique = argcheck{
-	doc =  [[
-<a name="Dataframe.unique">
-### Dataframe.unique(@ARGP)
-
-Get unique elements given a column name
-
-@ARGT
-
-_Return value_:  table with unique values or if as_keys == true then the unique
-	value as key with an incremental integer value => {'unique1':1, 'unique2':2, 'unique6':3}
-]],
-	{name="self", type="Dataframe"},
-	{name='column_name', type='string', help='column to inspect', req=true},
-	{name='as_keys', type='boolean',
-	 help='return table with unique as keys and a count for frequency',
-	 default=false},
-	{name='as_raw', type='boolean',
-	 help='return table with raw data without categorical transformation',
-	 default=false},
-	call=function(self, column_name, as_keys, as_raw)
-	assert(self:has_column(column_name),
-	       "Invalid column name: " .. tostring(column_name))
-	local unique = {}
-	local unique_values = {}
-	local count = 0
-
-	local column_values = self:get_column{column_name = column_name,
-																	as_raw = as_raw}
-	for i = 1,self.n_rows do
-		local current_key_value = column_values[i]
-		if (current_key_value ~= nil and
-		    not isnan(current_key_value)) then
-			if (unique[current_key_value] == nil) then
-				count = count + 1
-				unique[current_key_value] = count
-
-				if as_keys == false then
-					table.insert(unique_values, current_key_value)
-				end
-			end
-		end
-	end
-
-	if as_keys == false then
-		return unique_values
-	else
-		return unique
-	end
-end}
-
 -- Internal function for getting raw value for a categorical variable
 Dataframe._get_raw_cat_key = argcheck{
 	{name="self", type="Dataframe"},
@@ -373,34 +236,150 @@ Dataframe._get_raw_cat_key = argcheck{
 	return self:add_cat_key(column_name, key)
 end}
 
-Dataframe.get_row = argcheck{
+Dataframe.version = argcheck{
 	doc =  [[
-<a name="Dataframe.get_row">
-### Dataframe.get_row(@ARGP)
+<a name="Dataframe.version">
+### Dataframe.version(@ARGP)
 
-Gets a single row from the Dataframe
+Returns the current data-frame version
 
 @ARGT
 
-_Return value_: A table with the row content
+_Return value_: string
 ]],
 	{name="self", type="Dataframe"},
-	{name='index', type='number', doc='The row index to retrieve'},
-	call=function(self, index)
-	assert(isint(index), "The index should be an integer, you've provided " .. tostring(index))
-	assert(index > 0 and index <= self.n_rows, ("The index (%d) is outside the bounds 1-%d"):format(index, self.n_rows))
+	call=function(self)
+	return torch.version(self)
+end}
 
-	local row = {}
-	for _,key in pairs(self.columns) do
-		if (self:is_categorical(key)) then
-			row[key] = self:to_categorical(self.dataset[key][index],
-			                               key)
-		else
-			row[key] = self.dataset[key][index]
+Dataframe.set_version = argcheck{
+	doc =  [[
+<a name="Dataframe.set_version">
+### Dataframe.set_version(@ARGP)
+
+Sets the data-frame version
+
+@ARGT
+
+_Return value_: self
+]],
+	{name="self", type="Dataframe"},
+	call=function(self)
+	self.__version = "1.5"
+	return self
+end}
+
+Dataframe.upgrade_frame = argcheck{doc =  [[
+<a name="Dataframe.upgrade_frame">
+### Dataframe.upgrade_frame(@ARGP)
+
+Upgrades a dataframe using the old batch loading framework to the new framework
+by instantiating the subsets argument, copying the indexes and setting the
+samplers to either:
+
+- linear for test/validate or shuffle = false
+- permutation if shuffle = true and none of above names
+
+@ARGT
+
+_Return value_: Dataframe
+]],
+	{name = "self", type = "Dataframe"},
+	call = function(self)
+	local current_version = self:version()
+	self:set_version()
+	if (current_version == self.__version) then
+		print(("No need to update dataframe as it already is version '%s'"):format(current_version))
+		return
+	end
+
+	assert(self.subsets == nil, "The dataframe seems to be upgraded as it already has a subset property")
+
+	if (self.batch == nil) then
+		print("No need to update batch info")
+	else
+
+		-- Initiate the subsets
+		self:create_subsets(Df_Dict(self.batch.data_types))
+		self.batch.data_types = nil
+
+		-- Copy the old indexes into the subsets created
+		for sub_name,sub_keys in pairs(self.batch.datasets) do
+			-- Note, can't use drop/add since this breaks with __init call
+			self.subsets.sub_objs[sub_name].dataset["indexes"] = sub_keys
+			self.subsets.sub_objs[sub_name].nrows = #sub_keys
+
+			if (self.batch.shuffle and
+					(sub_name ~= "test" and sub_name ~= "validate")) then
+				self.subsets.sub_objs[sub_name]:set_sampler("permutation")
+			else
+				self.subsets.sub_objs[sub_name]:set_sampler("linear")
+			end
+
+		end
+		self.batch = nil
+
+		print("Updated batch metadata")
+	end
+
+	if (type(self.print) == "table") then
+		-- Do silently as this is rather unimportant
+		self.tostring_defaults = self.print
+		self.tostring_defaults.max_col_width = nil
+
+		local str_defaults = self:_get_init_tostring_dflts()
+		for key, value in pairs(str_defaults) do
+			if (not self.tostring_defaults[key]) then
+				self.tostring_defaults[key] = value
+			end
 		end
 	end
 
-	return row
+	return self
+end}
+
+Dataframe._get_init_tostring_dflts = argcheck{
+	{name = "self", type = "Dataframe"},
+	call = function(self)
+	return {
+		no_rows = 10,
+		min_col_width = 7,
+		max_table_width = 80
+	}
+end}
+
+Dataframe.assert_is_index = argcheck{doc =  [[
+<a name="Dataframe.assert_is_index">
+### Dataframe.assert_is_index(@ARGP)
+
+Asserts that the number is a valid index.
+
+@ARGT
+
+_Return value_: Dataframe
+]],
+	{name = "self", type = "Dataframe"},
+	{name = "index", type = "number", doc="The index to investigate"},
+	{name = "plus_one", type = "boolean", default = false,
+	 doc= "When adding rows, an index of size(1) + 1 is OK"},
+	call = function(self, index, plus_one)
+	if (plus_one) then
+		if (not isint(index) or
+				index < 0 or
+				index > self:size(1) + 1) then
+				assert(false, ("The index has to be an integer between 1 and %d - you've provided %s"):
+					format(self:size(1) + 1, index))
+		end
+	else
+		if (not isint(index) or
+				index < 0 or
+				index > self:size(1)) then
+				assert(false, ("The index has to be an integer between 1 and %d - you've provided %s"):
+					format(self:size(1), index))
+		end
+	end
+
+	return self
 end}
 
 return Dataframe

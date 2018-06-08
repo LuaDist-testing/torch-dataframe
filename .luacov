@@ -1,0 +1,29 @@
+return {
+	modules = {
+		["init"] = 'init.lua',
+		["utils"] = 'utils.lua',
+		["argcheck"] = 'argcheck.lua',
+		["main"] = 'main.lua',
+		["Extensions.metatable"] = 'Extensions/metatable.lua',
+		["Extensions.categorical"] = 'Extensions/categorical.lua',
+		["Extensions.column"] = 'Extensions/column.lua',
+		["Extensions.row"] = 'Extensions/row.lua',
+		["Extensions.load_batch"] = 'Extensions/load_batch.lua',
+		["Extensions.load_data"] = 'Extensions/load_data.lua',
+		["Extensions.missing_data"] = 'Extensions/missing_data.lua',
+		["Extensions.output"] = 'Extensions/output.lua',
+		["Extensions.export_data"] = 'Extensions/export_data.lua',
+		["Extensions.select_set_update"] = 'Extensions/select_set_update.lua',
+		["Extensions.statistics"] = 'Extensions/statistics.lua',
+		
+		["sub_classes.01_subset"] = 'sub_classes/01_subset.lua',
+		["sub_classes.10_batchframe"] = 'sub_classes/10_batchframe.lua',
+		["sub_classes.subset_extensions.samplers"] = 'sub_classes/subset_extensions/samplers.lua',
+
+		["helper_classes.01_iterator"] = 'helper_classes/01_iterator.lua',
+		["helper_classes.02_paralleliterator"] = 'helper_classes/02_paralleliterator.lua',
+		["helper_classes.10_array"] = 'helper_classes/10_array.lua',
+		["helper_classes.11_dict"] = 'helper_classes/11_dict.lua',
+		["helper_classes.12_tbl"] = 'helper_classes/12_tbl.lua'
+	}
+}

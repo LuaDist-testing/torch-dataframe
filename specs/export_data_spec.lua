@@ -1,5 +1,4 @@
 require 'lfs'
-require 'torch'
 
 -- Make sure that directory structure is always the same
 if (string.match(lfs.currentdir(), "/specs$")) then
@@ -7,7 +6,7 @@ if (string.match(lfs.currentdir(), "/specs$")) then
 end
 
 -- Include Dataframe lib
-paths.dofile('init.lua')
+dofile('init.lua')
 
 -- Go into specs so that the loading of CSV:s is the same as always
 lfs.chdir("specs")
@@ -18,9 +17,9 @@ describe("Exporting data process", function()
 		it("Exports the Dataframe to a CSV file",function()
 			local a = Dataframe("./data/full.csv")
 
-			a:to_csv("./data/copy_of_full.csv")
-			local b = Dataframe()
-			b:load_csv("./data/copy_of_full.csv")
+			local file_name = "./data/copy_of_full.csv"
+			a:to_csv(file_name)
+			local b = Dataframe(file_name)
 
 			for k,v in pairs(a.dataset) do
 				-- Avoid errors on NaN values
@@ -30,7 +29,18 @@ describe("Exporting data process", function()
 				assert.are.same(a:get_column(k), b:get_column(k))
 			end
 
-			os.remove("./data/copy_of_full.csv")
+			a:as_categorical("Col D")
+			a:to_csv(file_name)
+			b:load_csv(file_name)
+			b:as_categorical("Col D")
+
+			a:fill_na("Col D",8)
+			b:fill_na("Col D",8)
+
+			assert.are.same(a:get_column("Col D"), b:get_column("Col D"),
+			               "Failed to respect the categorical columns")
+
+			os.remove(file_name)
 		end)
 
 		describe("Column order functionality",function()
@@ -99,7 +109,7 @@ describe("Exporting data process", function()
 				sum = math.abs(tnsr[i][col_no] - a:get_column('Col A')[i])
 			end
 
-			assert.is_true(sum < 10^-5)
+			assert.near(0, sum, 10^-5)
 			os.remove("./data/tensor_test.th7")
 		end)
 
@@ -130,7 +140,7 @@ describe("Exporting data process", function()
 				sum = math.abs(tnsr[i][col_no] - a:get_column('1st')[i])
 			end
 
-			assert.is_true(sum < 10^-5)
+			assert.near(0, sum, 10^-5)
 
 			sum = 0
 			col_no = a:get_column_order{column_name='3rd', as_tensor = true}
@@ -138,7 +148,19 @@ describe("Exporting data process", function()
 				sum = math.abs(tnsr[i][col_no] - a:get_column('3rd')[i])
 			end
 
-			assert.is_true(sum < 10^-5)
+			assert.near(0, sum, 10^-5)
 		end)
 	end)
+
+	describe("torchnet get compatibility",function()
+		it("The get should retrieve a single row in tensor format",function()
+			local a = Dataframe("./data/advanced_short.csv")
+
+			tnsr = a:get(1)
+
+			assert.is.equal(tnsr:size(1),1)
+			assert.is.equal(tnsr:size(2),table.exact_length(a:get_numerical_colnames()))
+		end)
+	end)
+
 end)

@@ -1,5 +1,4 @@
 require 'lfs'
-require 'torch'
 
 -- Make sure that directory structure is always the same
 if (string.match(lfs.currentdir(), "/specs$")) then
@@ -7,7 +6,7 @@ if (string.match(lfs.currentdir(), "/specs$")) then
 end
 
 -- Include Dataframe lib
-paths.dofile('init.lua')
+dofile('init.lua')
 
 -- Go into specs so that the loading of CSV:s is the same as always
 lfs.chdir("specs")
@@ -116,5 +115,49 @@ describe("Column order functionality", function()
 		assert.is_true(sum < 10^-5)
 
 		assert.is.equal(a:get_column_order{column_name = '2nd', as_tensor = true}, nil)
+	end)
+
+
+	it("Check that orders can be swapped",function()
+		local a = Dataframe("./data/simple_short.csv")
+		a:swap_column_order("Col A", "Col B")
+		assert.are.same(a.column_order,
+			{[1] = "Col B",
+			[2] = "Col A",
+			[3] = "Col C"})
+	end)
+
+	it("Check that orders can set using pos_column_order",function()
+		local a = Dataframe("./data/simple_short.csv")
+		a:pos_column_order("Col B", 2)
+		assert.are.same(a.column_order,
+			{[1] = "Col A",
+			[2] = "Col B",
+			[3] = "Col C"})
+
+		a:pos_column_order("Col B", 1)
+		assert.are.same(a.column_order,
+				{[1] = "Col B",
+				[2] = "Col A",
+				[3] = "Col C"})
+
+		a:pos_column_order("Col C", 1)
+		assert.are.same(a.column_order,
+				{[1] = "Col C",
+				[2] = "Col B",
+				[3] = "Col A"})
+
+
+		a:pos_column_order("Col C", -1)
+		assert.are.same(a.column_order,
+				{[1] = "Col C",
+				[2] = "Col B",
+				[3] = "Col A"})
+
+		a:pos_column_order("Col C", 100)
+		assert.are.same(a.column_order,
+				{[1] = "Col B",
+				[2] = "Col A",
+				[3] = "Col C"})
 	end)
 end)

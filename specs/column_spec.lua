@@ -1,5 +1,4 @@
 require 'lfs'
-require 'torch'
 
 -- Make sure that directory structure is always the same
 if (string.match(lfs.currentdir(), "/specs$")) then
@@ -7,7 +6,7 @@ if (string.match(lfs.currentdir(), "/specs$")) then
 end
 
 -- Include Dataframe lib
-paths.dofile('init.lua')
+dofile('init.lua')
 
 -- Go into specs so that the loading of CSV:s is the same as always
 lfs.chdir("specs")
@@ -57,7 +56,10 @@ describe("Column operations", function()
 			assert.are.same(a.columns,{})
 			assert.are.same(a.column_order,{})
 			assert.are.same(a.categorical,{})
-			assert.are.same(a.print,{no_rows = 10, max_col_width = 20})
+			assert.are.same(a.tostring_defaults,
+			                {no_rows = 10,
+			                min_col_width = 7,
+			                max_table_width = 80})
 			assert.are.same(a.schema,{})
 			assert.is.equal(a.n_rows,0)
 		end)
@@ -95,6 +97,13 @@ describe("Column operations", function()
 			assert.has.error(function() a:add_column('Col G', {0,1,2,3,5}) end)
 		end)
 
+		it("Add positioning",function()
+			a:add_column('Position 1', 1, 1)
+			assert.are.same(a:get_column_order('Position 1'), 1)
+
+			a:add_column('Position 3', 3, 'A')
+			assert.are.same(a:get_column_order('Position 3'), 3)
+		end)
 	end)
 
 	describe("Get a column functionality",function()
@@ -160,8 +169,46 @@ describe("Column operations", function()
 		end)
 	end)
 
+	describe("Search functionalities",function()
+		local a = Dataframe("./data/advanced_short.csv")
+		it("Finds the value in Col B", function()
+			assert.are.same(a:which('Col B', 'A'), {1})
+			assert.are.same(a:which('Col B', 'B'), {2,3})
+		end)
+
+		it("Finds the value in Col A", function()
+			assert.are.same(a:which('Col A', 'A'), {})
+			assert.are.same(a:which('Col A', 1), {1})
+		end)
+
+		it("Finds the value in Col C", function()
+			assert.are.same(a:which('Col C', 0/0), {2})
+			assert.are.same(a:which('Col C', 9), {3})
+		end)
+
+		it("Finds the max value", function()
+			local indx, val = a:which_max('Col A')
+			assert.are.same(indx, {3})
+			assert.are.same(val, 3)
+			indx, val = a:which_max('Col C')
+			assert.are.same(indx, {3})
+			assert.are.same(val, 9)
+			assert.has_error(function() a:which_max('Col B') end)
+		end)
+
+		it("Finds the min value", function()
+			local indx, val = a:which_min('Col A')
+			assert.are.same(indx, {1})
+			assert.are.same(val, 1)
+			indx, val = a:which_min('Col C')
+			assert.are.same(indx, {1})
+			assert.are.same(val, 8)
+			assert.has_error(function() a:which_min('Col B') end)
+		end)
+	end)
+
 	describe("Other functionalities",function()
-			local a = Dataframe("./data/advanced_short.csv")
+		local a = Dataframe("./data/advanced_short.csv")
 
 		it("Returns all numerical columns names", function()
 			assert.are.same(a:get_numerical_colnames(), {'Col A', 'Col C'})
@@ -179,4 +226,37 @@ describe("Column operations", function()
 		end)
 	end)
 
+	describe("Bind columns",function()
+		it("Equal correct cbind and dataframe", function()
+			local a = Dataframe("./data/advanced_short.csv")
+
+			local b = Dataframe()
+			b:load_table(Df_Dict({Test = {1,2,3}}))
+			a:cbind(b)
+
+			assert.are.same(a:get_column('Test'),
+			                b:get_column('Test'))
+		end)
+
+		it("Equal correct cbind with Df_Dict", function()
+			local a = Dataframe("./data/advanced_short.csv")
+
+			a:cbind(Df_Dict({Test = {1,2,3}}))
+
+			assert.are.same(a:get_column('Test'),
+			                {1,2,3})
+		end)
+
+		it("Checks input", function()
+			local a = Dataframe("./data/advanced_short.csv")
+
+			local b = Dataframe()
+			b:load_table(Df_Dict({Test = {1,2,3,4}}))
+			assert.has_error(function() a:cbind(b) end)
+
+			local c = Dataframe()
+			c:load_table(Df_Dict({['Col A'] = {1,2,3}}))
+			assert.has_error(function() a:cbind(c) end)
+		end)
+	end)
 end)
