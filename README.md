@@ -2,15 +2,22 @@
 [![Build Status](https://travis-ci.org/AlexMili/torch-dataframe.svg?branch=master)](https://travis-ci.org/AlexMili/torch-dataframe)
 
 # Dataframe
-Dataframe is a [Torch7]((http://torch.ch/)) class to load and manipulate tabular
-data (e.g. Kaggle-style CSVs) inspired from [R's](https://cran.r-project.org/) and
-[pandas'](http://pandas.pydata.org/) [data frames](https://github.com/mobileink/data.frame/wiki/What-is-a-Data-Frame%3F).
+Dataframe is a [Torch7][torch] class to load and manipulate tabular
+data (e.g. Kaggle-style CSVs) inspired from [R's][R] and
+[pandas'][pandas] [data frames][df].
 
-As of release 1.5 it fully supports the [torchnet](https://github.com/torchnet/torchnet)
-data structure. It also has custom iterators to convenient integration with
-torchnet's engines, see the [mnist example](https://github.com/AlexMili/torch-dataframe/blob/master/examples/mnist_example.lua).
+[torch]: http://torch.ch/
+[R]: https://cran.r-project.org/
+[pandas]: http://pandas.pydata.org/
+[df]: https://github.com/mobileink/data.frame/wiki/What-is-a-Data-Frame%3F
 
-For a more detailed look at the changes between the versions have a look at the  [NEWS](https://github.com/AlexMili/torch-dataframe/blob/master/NEWS.md) file.
+As of release 1.5 it fully supports the [torchnet][thnet] data structure. It also has custom iterators to convenient integration with torchnet's engines, see the [mnist example][thnet_mnist]. As of release 1.6 it has changed the internal storage to tensor
+
+[thnet]: https://github.com/torchnet/torchnet
+[thnet_mnist]: https://github.com/AlexMili/torch-dataframe/blob/master/examples/mnist_example.lua
+[NEWS]: https://github.com/AlexMili/torch-dataframe/blob/master/NEWS.md
+
+For a more detailed look at the changes between the versions have a look at the  [NEWS][NEWS] file.
 
 <!-- TOC depthFrom:2 depthTo:6 withLinks:1 updateOnSave:1 orderedList:0 -->
 
@@ -33,12 +40,24 @@ For a more detailed look at the changes between the versions have a look at the 
 <!-- /TOC -->
 
 ## Requirements
-- [torch](http://torch.ch/)
-- [csvigo](https://github.com/clementfarabet/lua---csv)
-- [luafilesystem](https://keplerproject.github.io/luafilesystem/)
+- [torch][torch]
+- [torchnet][thnet]
+- [csvigo][csvigo]
+- [luafilesystem][lfs]
+- [paths][paths]
+- [tds][tds]
+- [threads][threads]
+- [argcheck][argcheck]
+
+[csvigo]: https://github.com/clementfarabet/lua---csv
+[lfs]: https://keplerproject.github.io/luafilesystem/
+[paths]: https://github.com/torch/paths
+[tds]: https://github.com/torch/tds
+[threads]: https://github.com/torch/threads
+[argcheck]: https://github.com/torch/argcheck
 
 ## Installation
-You can clone this repository or directly install it through luarocks:
+You can clone this repository or directly install it through `luarocks`:
 
 ```bash
 git clone https://github.com/AlexMili/torch-dataframe
@@ -60,62 +79,32 @@ luarocks install torch-dataframe
 
 ## Changelog
 
-Version: 1.5
+Version: 1.6
 --------------------
-* Added new subset and batch loading functionality (issue #22)
-* Added metatable functionality (issue #18)
-* The as_categorical can now receive levels, labels and exclusions (issue #23)
-* The unique sorts the results before returning, thereby preventing the order to
-  depend on any irrelevant changes in the original table order. _IMPORTANT_: This
-  will affect the numbers corresponding to categoricals (part of issue #23)
-* Added compatibility with the *torchnet* infrastructure via inheritance and a custom
-  iterator that allows utilizing the internal permutation logistic (issue #24)
-* The Batchframe can now have default data/load options allowing a simpler `to_tensor` call
-* The Batchframe now supports common transformations that may be required for the label
-  via the `label_shape`. See the ntwrk_implementation_spec file that contains basic examples.
-* Added so that `__init` parameters can be passed along the subset line primary for
-  allowing default Batchframe load/data arguments
-* Insert now takes an index argument allowing insertion of rows. Backward compatibility retained.
-* Added append that does the same as index previously did, i.e. adding a row at the bottom of the table
-* Added rbind (row-bind) as an append alias
-* Added cbind (column-bind)
-* Added wide2long for converting wide datasets to long
-* Added a version function
-* Added upgrade_frame that handles upgrades from previous Dataframe versions
-* The statistics can now return dataframe that is also the default (allows nicer printing)
-* The add_column can now take a position argument and updates the schema + columns
-* The init-constructor for with a table argument now also accepts column_order argument
-* The column order can now be specified using the `pos_column_order` and manipulated
-  using `swap_column_order`.
-* The tostring now has a more advanced printing that aims at total table width
-  instead of just making sure that certain columns didn't end up too wide.
-  The previous Dataframe.print default arguments for printing have been moved to
-  Dataframe.tostring_defaults
-* The helper classes Df_Array, Df_Dict and Df_Tbl now have a metatable `__len__` option
-* The as_batchframe has been renamed to frame_type that defaults to current frame type
-* The set now changes all matching values instead of only the first occurrence
-* Fixed bug with outputting categorical columns
-* Fixed bug related to boolean columns. *Note*: columns that are created using the
-  csv-option are currently not being converted to boolean columns but will remain
-  as strings with 'true' and 'false'
+* The data is now stored in Dataseries that handles all the manipulations, statistics, categoricals, etc internally. The data backend is either a tensor or a tds.Vec in order to better accomodate large datasets.
+* The self.columns has been dropped and there is now only self.column_order that keeps track of column order.
+* Most functions now use either tds.Hash or tds.Vec for returning values instead of regular tables.
+* The data types are now more sophisticate with boolean, integer, long, double, and string. The first and the last are internally stored as `tds.Vec` while the remaining are in the form of torch tensors.
+* Since conversions are more restricted with the new column types the is a boolean2tensor and boolean2categorical that help converting boolean columns into numerical.
+* The `Dataframe.schema` property has been removed as it now resides in the series. The same information can be retrieved using `get_schema()`.
+* There is now a custom busted assertion that can compare tensors, tds, and Dataseries.
+* The csv data is entered using csvigo's `large` mode thus circumventing the memory limit for large csv's.
+* The to_/from_categorical now always return a single value when a single value is entered.
+* Add column now takes a Dataseries instead of a Df_Array
+* Generalized the argcheck by adding string.split for `|` separated arguments
+* Multiple minor bug-fixes with non-local variables
 
+See `NEWS.md` file for previous changes.
 
 ## Usage
 
 ### Named arguments
 
-The Dataframe relies on [argcheck](https://github.com/torch/argcheck) for parsing
-arguments. This means that you can used named parameters using the `function{arg_name=value}`
-syntax. Named arguments are supported by all functions except the constructor and
-is in certain functions mandatory in order to avoid ambiguity.
+The Dataframe relies on [argcheck][argcheck] for parsing arguments. This means that you can used named parameters using the `function{arg_name=value}` syntax. Named arguments are supported by all functions except the constructor and is in certain functions mandatory in order to avoid ambiguity.
 
-The argcheck package also works as the API documentation. It checks arguments
-and if you happen to provide the function with invalid arguments it will automatically
-output the function documentation.
+The argcheck package also works as the API documentation. It checks arguments and if you happen to provide the function with invalid arguments it will automatically output the function documentation.
 
-__Important__: Due to limitations in the Lua language the package uses helper classes
-for separating regular table arguments from tables passed into as arguments. The
-three classes are:
+__Important__: Due to limitations in the Lua language the package uses helper classes for separating regular table arguments from tables passed into as arguments. The three classes are:
 
 - *Df_Array* - contains only values and no keys
 - *Df_Dict* - a dictionary table that has named keys that map to all values
@@ -173,7 +162,7 @@ General dataset information can be found using:
 df:shape() -- print {rows=3, cols=3}
 #df -- gets the number of rows
 df:size() -- returns a tensor with the size rows, columns
-df.columns -- table of columns names
+df.column_order -- table of columns names
 df:count_na() -- print all the missing values by column name
 ```
 
@@ -216,10 +205,9 @@ df:update(function(row) row['column'] == 'test' end,
 
 ### Categorical variables
 
-You can define [categorical variables](https://en.wikipedia.org/wiki/Categorical_variable)
-that will be treated internally as numbers ranging from 1 to n levels
-while displayed as strings. The numeric representation is retained when exporting
-`to_tensor` allowing a simpler understanding of a classifier's output:
+You can define [categorical variables][catvar] that will be treated internally as numbers ranging from 1 to n levels while displayed as strings. The numeric representation is retained when exporting `to_tensor` allowing a simpler understanding of a classifier's output:
+
+[catvar]: https://en.wikipedia.org/wiki/Categorical_variable
 
 ```lua
 df:as_categorical('my string column') -- converts a column to categorical
@@ -259,23 +247,13 @@ df:to_csv('data.csv')
 
 ### Batch loading
 
-The Dataframe provides a built-in system for handling batch loading. It also has an
-extensive set of samplers that you can use. See API docs for more on which that are available.
+The Dataframe provides a built-in system for handling batch loading. It also has an extensive set of samplers that you can use. See API docs for more on which that are available.
 
 The gist of it is:
-- The main Dataframe is initialized for batch loading via calling the `create_subsets`.
-This creates random subsets that have their own samplers. The default is a train 70%,
-validate 20%, and a test 10% split in the data but you can choose any split and any
-names.
-- Each subset is a separate dataframe subclass that has two columns,
-(1)  indexes with the corresponding index in the main dataframe,
-(2) labels that some of the samplers require.
-- When you want to retrieve a batch from a subset you call the subset using
- `my_dataframe:get_subset('train'):get_batch(30)` or `my_dataframe['/train']:get_batch(30)`.
-- The batch returned is also a subclass that has a custom `to_tensor` function
-that returns the data and corresponding label tensors. You can provide custom
-functions that will get the full row as an argument allowing you to use e.g. a
-filename that permits load an external resource.
+- The main Dataframe is initialized for batch loading via calling the `create_subsets`. This creates random subsets that have their own samplers. The default is a train 70%, validate 20%, and a test 10% split in the data but you can choose any split and any names.
+- Each subset is a separate dataframe subclass that has two columns, (1) indexes with the corresponding index in the main dataframe, (2) labels that some of the samplers require.
+- When you want to retrieve a batch from a subset you call the subset using `my_dataframe:get_subset('train'):get_batch(30)` or `my_dataframe['/train']:get_batch(30)`.
+- The batch returned is also a subclass that has a custom `to_tensor` function that returns the data and corresponding label tensors. You can provide custom functions that will get the full row as an argument allowing you to use e.g. a filename that permits load an external resource.
 
 A simple example:
 
@@ -289,18 +267,18 @@ local data, label = batch:to_tensor{
 }
 ```
 
-As of version 1.5 you may also want to consider using th iterators that integrate
-with the torchnet infrastructure. Take a look at the iterator API and the mnist
-example for how an implementation may look.
+As of version 1.5 you may also want to consider using th iterators that integrate with the torchnet infrastructure. Take a look at the iterator API and the mnist example for how an implementation may look.
 
 ## Tests
 
-The package contains an extensive test suite and tries to apply a [behavior driven
-development](https://en.wikipedia.org/wiki/Behavior-driven_development) approach.
-All features should be accompanied by a test-case.
+The package contains an extensive test suite and tries to apply a [behavior driven development][bhdrv] approach. All features should be accompanied by a test-case.
+
+[bhdrv]: https://en.wikipedia.org/wiki/Behavior-driven_development
 
 To launch the tests you need to install ```busted``` (See:
-[Olivine-Labs/busted](http://olivinelabs.com/busted/)) via luarocks:
+[Olivine-Labs/busted][busted]) via `luarocks`:
+
+[busted]: http://olivinelabs.com/busted/
 
 ```bash
 luarocks install busted
@@ -315,11 +293,10 @@ cd specs/
 
 ## Documentation
 
-The package relies on self-documenting functions via the
-[argcheck](https://github.com/torch/argcheck) package that reside in the
-[doc](https://github.com/AlexMili/torch-dataframe/tree/master/doc) folder.
-The [GitHub Wiki](https://github.com/AlexMili/torch-dataframe/wiki) is intended
-for more extensive in detail documentation.
+The package relies on self-documenting functions via the [argcheck][argcheck] package that reside in the [doc][df_doc] folder. The [GitHub Wiki][df_wiki] is intended for more extensive in detail documentation.
+
+[df_doc]: https://github.com/AlexMili/torch-dataframe/tree/master/doc
+[df_wiki]: https://github.com/AlexMili/torch-dataframe/wiki
 
 To generate the documentation please run:
 
@@ -329,10 +306,8 @@ th doc.lua > /dev/null
 
 ## Contributing
 
-Feel free to report a bug, suggest enhancements or submit new cool features using
-[Issues](https://github.com/AlexMili/torch-dataframe/issues) or directly send us
-a [Pull Request](https://github.com/AlexMili/torch-dataframe/pulls) :).
-Don't forget to test your code and generate the doc before submitting.
-You can find how we implemented our tests in the
-[specs directory](https://github.com/AlexMili/torch-dataframe/tree/readme/specs).
-See "Behavior Driven Development" for more details on this technique.
+Feel free to report a bug, suggest enhancements or submit new cool features using [Issues][df_issues] or directly send us a [Pull Request][df_pr] :). Don't forget to test your code and generate the doc before submitting. You can find how we implemented our tests in the [specs directory][df_specs]. See "Behavior Driven Development" for more details on this technique.
+
+[df_issues]: https://github.com/AlexMili/torch-dataframe/issues
+[df_pr]: https://github.com/AlexMili/torch-dataframe/pulls
+[df_specs]: https://github.com/AlexMili/torch-dataframe/tree/readme/specs
